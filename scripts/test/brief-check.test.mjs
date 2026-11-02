@@ -109,6 +109,16 @@ test('a missing brief file exits 2 with one error line and no stack', (t) => {
   assert.doesNotMatch(result.stderr, /\bat .*\(|node:internal|ENOENT/);
 });
 
+test('a line suffix and a leading ./ do not change the hit count', (t) => {
+  const repo = sandbox(t, '`src/liveFile.ts:4,9`\n`./src/liveFile.ts`\n');
+  writeFileSync(join(repo, 'src', 'liveFile.ts'), 'export const x = 1;\n');
+  spawnSync('git', ['add', 'src'], { cwd: repo });
+  const result = run(repo);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /src\/liveFile\.ts:4,9 hits=1/);
+  assert.match(result.stdout, /\.\/src\/liveFile\.ts hits=1/);
+});
+
 test('a backslash path counts like its slash form', (t) => {
   const result = run(sandbox(t, '`src\\code.ts`\n`src\\gone.ts`\n'));
   assert.equal(result.status, 1);
