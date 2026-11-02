@@ -84,6 +84,6 @@ export type PayloadAssertions = [
   Expect<Fits<LoginPayload, typeof loginSchema>>,
   Expect<Fits<ResetRequestPayload, typeof resetRequestSchema>>,
   Expect<Fits<ResetConfirmPayload, typeof resetConfirmSchema>>,
-  // The Account form must never offer `status` (Moderator-only).
+  // `status` stays out of UpdateUserPayload (see shared/src/user.ts).
   Expect<'status' extends keyof UpdateUserPayload ? false : true>,
 ];

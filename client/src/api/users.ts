@@ -14,8 +14,7 @@ export const updateUser = (
   });
 };
 
-// A fixed body rather than a widened UpdateUserPayload: only a Moderator may send
-// `status`, and the Account form must never offer it.
+// Fixed body: `status` is Moderator-only and absent from UpdateUserPayload.
 export const blockUser = (userId: number): Promise<PublicUser> => {
   return request<PublicUser>(`/users/${userId}`, {
     method: 'PATCH',
