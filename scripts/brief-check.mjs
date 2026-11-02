@@ -16,6 +16,7 @@ const rows = checkBrief({ root, briefPath: resolve(briefPath) });
 for (const { line, token, hits } of rows)
   console.log(`${briefPath}:${line} ${token} hits=${hits}`);
 const zero = rows.filter((row) => row.hits === 0);
-if (zero.length)
+if (zero.length) {
   console.error(`brief-check: ${zero.length} name(s) with 0 hits, check each`);
-process.exitCode = zero.length ? 1 : 0;
+  process.exitCode = 1;
+}
