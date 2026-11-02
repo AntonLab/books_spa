@@ -8,6 +8,7 @@ import {
   extractTokens,
   findMisses,
   findUnusedAllowlist,
+  isSuffixOf,
   isTrackedSuffix,
   trackedFiles,
 } from '../doc-refs.mjs';
@@ -188,6 +189,12 @@ test('isTrackedSuffix matches a whole path or a tail on a segment boundary', () 
   assert.equal(isTrackedSuffix(files, 'fig.ts'), false);
   assert.equal(isTrackedSuffix(files, 'xb.ts'), false);
   assert.equal(isTrackedSuffix([], 'b.ts'), false);
+});
+
+test('isSuffixOf matches one path against a token on a segment boundary', () => {
+  assert.equal(isSuffixOf('a/b.ts', 'a/b.ts'), true);
+  assert.equal(isSuffixOf('x/a/b.ts', 'a/b.ts'), true);
+  assert.equal(isSuffixOf('xb.ts', 'a/b.ts'), false);
 });
 
 test('trackedFiles lists tracked paths and throws outside a repo', (t) => {

@@ -61,8 +61,11 @@ export const trackedFiles = (root) => {
   return stdout.split('\0');
 };
 
+export const isSuffixOf = (file, token) =>
+  file === token || file.endsWith(`/${token}`);
+
 export const isTrackedSuffix = (files, token) =>
-  files.some((file) => file === token || file.endsWith(`/${token}`));
+  files.some((file) => isSuffixOf(file, token));
 
 export const findMisses = ({ root, docs, allowlist = new Set() }) => {
   const paths = docs.map((doc) => doc.replace(/\\/g, '/'));
