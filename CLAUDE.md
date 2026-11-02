@@ -34,9 +34,9 @@ types only from a file whose real path lies outside `node_modules`.
 
 ## Status
 
-- **A dev database built before the migrations must be dropped and rebuilt
-  once** (`/db-reset`). Later schema changes arrive as migrations; see
-  `.claude/rules/server/sequelize.md`.
+- **Schema comes from `sequelize.sync()`, which never alters a table.** After a
+  model change, drop and rebuild the dev database (`/db-reset`); see
+  `.claude/rules/server/sequelize.md` and ADR-0016.
 - `npm run seed -w server -- --force` loads the demo data. **The flag is
   mandatory and destructive** — see `server/CLAUDE.md`.
 

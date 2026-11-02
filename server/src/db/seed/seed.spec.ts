@@ -32,7 +32,6 @@ import { User } from '../../models/User.ts';
 import { ensureDatabase } from '../ensureDatabase.ts';
 import { skipWithoutMysql } from '../mysqlProbe.testkit.ts';
 import { testDbConfig, testDbName } from '../testDb.testkit.ts';
-import { createMigrator } from '../migrator.ts';
 import { createSequelize } from '../sequelize.ts';
 import { buildPlan } from './plan.ts';
 import { RNG_SEED, createRng } from './rng.ts';
@@ -41,13 +40,6 @@ import { RNG_SEED, createRng } from './rng.ts';
 // without seeding. These tests run it the way `npm run seed` does, as a child
 // process, and watch what it does to a schema of their own.
 const TEST_DB_NAME = testDbName('seed');
-
-const APPLIED_MIGRATIONS = [
-  '0001-baseline.ts',
-  '0002-illustrations.ts',
-  '0003-xor-checks.ts',
-  '0004-illustration-dimensions.ts',
-];
 
 const SERVER_DIR = path.resolve(import.meta.dirname, '../../..');
 
@@ -110,19 +102,13 @@ function runSeed(
   });
 }
 
-// Drop first: a schema left by a red run or by sync() would make the baseline
-// fail.
+// Force: a schema left by a red run must not leak its rows into this one.
 async function buildSchema(sequelize: Sequelize): Promise<void> {
-  await sequelize.getQueryInterface().dropAllTables();
-  await createMigrator(sequelize).up();
+  await sequelize.sync({ force: true });
 }
 
-async function appliedMigrations(sequelize: Sequelize): Promise<string[]> {
-  const rows = await sequelize.query<{ name: string }>(
-    'SELECT name FROM SequelizeMeta',
-    { type: QueryTypes.SELECT }
-  );
-  return rows.map((row) => row.name);
+async function tableNames(sequelize: Sequelize): Promise<string[]> {
+  return (await sequelize.getQueryInterface().showAllTables()).sort();
 }
 
 async function countRows(): Promise<Record<string, number>> {
@@ -214,11 +200,11 @@ describe('seed.ts without --force against real MySQL', { skip }, () => {
     assert.doesNotMatch(run.stderr, /\] (WARN|ERROR) /);
     assert.equal(found.users, 1);
     assert.deepEqual(await countRows(), found);
-    assert.deepEqual(await appliedMigrations(sequelize), APPLIED_MIGRATIONS);
   });
 
   // Last in this suite: it drops the bystander's tables.
-  test('builds the schema through the migrations on a fresh database', async () => {
+  test('builds the schema with sync() on a fresh database', async () => {
+    const expected = await tableNames(sequelize);
     await sequelize.getQueryInterface().dropAllTables();
 
     const run = await runSeed({
@@ -228,7 +214,7 @@ describe('seed.ts without --force against real MySQL', { skip }, () => {
     });
 
     assert.equal(run.code, 0, run.stderr);
-    assert.deepEqual(await appliedMigrations(sequelize), APPLIED_MIGRATIONS);
+    assert.deepEqual(await tableNames(sequelize), expected);
   });
 });
 

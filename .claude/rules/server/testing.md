@@ -38,8 +38,7 @@ Each answers a question the others cannot:
   MySQL, on its own `_app` schema. It takes its repositories from
   `createSequelizeRepositories()` as `index.ts` does, but repeats the boot
   steps around them (`initModels`, `sync`, `syncPermissions`), so a change to
-  those needs the same change there. Its `sync` stands in for the migrations,
-  kept equal by the parity spec. Its admin comes from `User.create`, since
+  those needs the same change there. Its admin comes from `User.create`, since
   no API makes one.
 
 ## MySQL-backed suites

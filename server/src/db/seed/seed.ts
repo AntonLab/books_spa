@@ -46,7 +46,6 @@ import { createSeriesSchema } from '../../types/series.ts';
 import { createUserSchema } from '../../types/user.ts';
 import { loadConfig } from '../config.ts';
 import { ensureDatabase } from '../ensureDatabase.ts';
-import { createMigrator } from '../migrator.ts';
 import { GENRE_TREE, parentGenreOf } from './content.ts';
 import {
   DAY_MS,
@@ -683,14 +682,14 @@ async function main(): Promise<void> {
   const config = loadConfig();
   assertSafeTarget(config, force);
 
-  // The same ensure-and-migrate steps boot takes outside production, and
+  // The same ensure-and-sync steps boot takes outside production, and
   // idempotent, so a fresh clone can seed before the server has ever run.
   await ensureDatabase(config.db);
   const sequelize = createSequelize(config.db);
   try {
     initModels(sequelize);
     await sequelize.authenticate();
-    await createMigrator(sequelize).up();
+    await sequelize.sync();
 
     if (!force) {
       logger.info(

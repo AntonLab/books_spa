@@ -7,7 +7,6 @@
     "dev": "node --watch ./src/index.ts",
     "start": "node ./src/index.ts",
     "seed": "node --env-file-if-exists=.env.local ./src/db/seed/seed.ts",
-    "migrate": "node --env-file-if-exists=.env.local ./src/db/migrate.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -24,7 +23,6 @@
     "sequelize": "6.37.8",
     "shared": "*",
     "sharp": "0.35.5",
-    "umzug": "3.8.3",
     "zod": "4.6.7"
   },
   "devDependencies": {

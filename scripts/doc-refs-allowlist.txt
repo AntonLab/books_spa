@@ -21,7 +21,6 @@ writeRateLimit
 .superpowers/sdd/<topic>/ui-check.md
 <name>Repository.contract.testkit.ts
 <name>Repository.spec.ts
-NNNN-name.ts
 docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md
 docs/superpowers/specs/YYYY-MM-DD-<topic>-followups.md
 repositories/<name>Repository.fake.testkit.ts

@@ -2,7 +2,7 @@ export interface PublicIllustration {
   id: number;
   position: number;
   caption: string | null;
-  // Null for rows stored before migration 0004: they have no size.
+  // Null for rows stored without a size.
   width: number | null;
   height: number | null;
   updatedAt: Date;
