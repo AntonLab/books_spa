@@ -74,7 +74,7 @@ that read like mistakes and are not.
   `aria-hidden` and `tabIndex={-1}`: the Cover's image is `alt=""`, so a
   reachable Cover link would have no name and repeat the title's link. A tile
   shows no genre or tags; BookCard also drops the description and date.
-  A Series has no Cover, so its tile keeps the description.
+  A Series has a Cover (`coverUrl`, `PUT`/`DELETE`/`GET /:id/cover`); its tile keeps the description.
 
 ## Images (`BookCover`, `AccountAvatar`, `ImageUploadButton`)
 

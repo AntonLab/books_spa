@@ -75,6 +75,8 @@ ships `uuid` >= 11.1.1. `braces` (via
   they rewrote; blocks on a surviving ESLint error; warnings pass.
 - Refuses a partially staged file, since re-staging the rewritten copy would
   pull its unstaged hunks into the commit.
+- When a staged path is a `CLAUDE.md` or under `.claude/rules/`, also runs
+  `scripts/doc-limits.mjs` and `scripts/check-doc-refs.mjs`.
 - If `node_modules/.bin` is missing it warns and lets the commit through.
 - `core.hooksPath` is per-clone; the root `prepare` script sets it
   (`git config core.hooksPath .githooks` by hand).

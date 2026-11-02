@@ -115,9 +115,12 @@ configured before `npm test` there.
 ## Quality gates
 
 Before committing, run `npm run typecheck`, `npm run lint`,
-`npm run format:check` and `npm test` from the repo root. Commit messages use
+`npm run format:check` and `npm test` from the repo root. `npm run lint` also
+runs `scripts/doc-limits.mjs` and `scripts/check-doc-refs.mjs`; `npm test`
+covers every workspace plus the script tests. Commit messages use
 conventional-commit prefixes. `npm install` enables the `.githooks/` hooks
-(ESLint and Prettier on staged files, a commit-message check); they never run
+(ESLint and Prettier on staged files, a commit-message check, and those two
+doc scripts when a `CLAUDE.md` or a rule is staged); they never run
 `typecheck` or the tests. `CLAUDE.md` (Quality Gates) holds the full rules.
 
 ### Continuous integration
