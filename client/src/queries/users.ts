@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { deleteAvatar, updateUser, uploadAvatar } from '../api/users';
-import type { AccountChanges } from '../api/users';
+import type { UpdateUserPayload } from 'shared';
 import { invalidateWorks } from './invalidateWorks';
 import { queryKeys } from './keys';
 
@@ -32,7 +32,9 @@ const useAccountMutation = <TVariables, TResult>(
 };
 
 export const useUpdateAccount = (userId: number) =>
-  useAccountMutation((changes: AccountChanges) => updateUser(userId, changes));
+  useAccountMutation((changes: UpdateUserPayload) =>
+    updateUser(userId, changes)
+  );
 
 export const useUploadAvatar = (userId: number) =>
   useAccountMutation((file: File) => uploadAvatar(userId, file));
