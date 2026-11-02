@@ -9,6 +9,17 @@ A round that applies the follow-ups of a finished plan has no plan, only a
 brief file. It runs the same chain as a plan task: `sdd-implementer`, then
 `sdd-task-reviewer`, then `gate-runner`.
 
+- **The controller saves the report.** The harness refuses a subagent's
+  `Write` to a report file ("Subagents should return findings as text"), and
+  an implementer still replies with the path as if it existed. Tell it in the
+  dispatch to return the full report as its reply, then `Write` the file
+  yourself before `sdd-step.sh review`, and `ls` it before a reviewer reads it.
+- **Brief-pinned text is not a finding.** A brief that gives exact comment or
+  doc text overrides `CODING_STANDARDS.md` "Comments" for that text: say so in
+  the reviewer dispatch, or every review repeats the same Minor.
+- **Follow-up lines a round fixed** are marked `[fixed: <sha>]` by the
+  controller as the round ends, so `/swarm:ship` finds no open line to ask
+  about.
 - **Review package without a plan:** pass the brief file where the plan goes,
   `bash scripts/sdd-step.sh review <brief.md> <BASE> [HEAD]`. It writes the
   diff under `.superpowers/sdd/<brief-name>/` and prints the path. Do not
