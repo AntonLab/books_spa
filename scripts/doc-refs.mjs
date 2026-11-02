@@ -58,7 +58,7 @@ export const trackedFiles = (root) => {
   );
   if (status !== 0)
     throw new Error(`git ls-files failed: ${error?.message ?? stderr}`);
-  return stdout.split('\0');
+  return stdout.split('\0').filter(Boolean);
 };
 
 export const isSuffixOf = (file, token) =>

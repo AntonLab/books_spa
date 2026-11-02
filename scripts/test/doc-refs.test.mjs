@@ -200,6 +200,7 @@ test('isSuffixOf matches one path against a token on a segment boundary', () => 
 test('trackedFiles lists tracked paths and throws outside a repo', (t) => {
   const root = repo(t, { 'a/b.ts': 'x' });
   assert.ok(trackedFiles(root).includes('a/b.ts'));
+  assert.ok(trackedFiles(root).every((file) => file !== ''));
   const outside = mkdtempSync(join(tmpdir(), 'no-repo-'));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
   assert.throws(() => trackedFiles(outside), /git ls-files failed/);
