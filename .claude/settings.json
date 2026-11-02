@@ -1,6 +1,61 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "claudeMdExcludes": ["**/.claude/worktrees/**/CLAUDE.md"],
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npm test *)",
+      "Bash(npx eslint *)",
+      "Bash(npx prettier *)",
+      "Bash(npx jest *)",
+      "Bash(node --test *)",
+      "Bash(node --env-file-if-exists=.env.local --test *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git fetch *)",
+      "Bash(git check-ignore *)",
+      "Bash(bash scripts/sdd-step.sh *)",
+      "Bash(node scripts/plan-check.mjs *)"
+    ],
+    "deny": [
+      "Read(**/.env.local)",
+      "Edit(**/.env.local)",
+      "Edit(package-lock.json)"
+    ],
+    "ask": [
+      "Bash(npm *seed*)",
+      "Bash(node *seed.ts*)",
+      "PowerShell(npm *seed*)",
+      "PowerShell(node *seed.ts*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/branch-check.mjs --warn",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/preflight.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "mattpocock-skills@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "ponytail@ponytail": true,
+    "caveman@caveman": true,
+    "swarm@custom-agents-swarm": true
+  },
   "extraKnownMarketplaces": {
     "claude-plugins-official": {
       "source": {
@@ -27,60 +82,5 @@
       }
     }
   },
-  "enabledPlugins": {
-    "superpowers@claude-plugins-official": true,
-    "mattpocock-skills@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
-    "ponytail@ponytail": true,
-    "caveman@caveman": true,
-    "swarm@custom-agents-swarm": true
-  },
-  "permissions": {
-    "allow": [
-      "Bash(npm run *)",
-      "Bash(npm test *)",
-      "Bash(npx eslint *)",
-      "Bash(npx prettier *)",
-      "Bash(npx jest *)",
-      "Bash(node --test *)",
-      "Bash(node --env-file-if-exists=.env.local --test *)",
-      "Bash(git status *)",
-      "Bash(git diff *)",
-      "Bash(git log *)",
-      "Bash(git fetch *)",
-      "Bash(git check-ignore *)",
-      "Bash(bash scripts/sdd-step.sh *)",
-      "Bash(node scripts/plan-check.mjs *)"
-    ],
-    "ask": [
-      "Bash(npm *seed*)",
-      "Bash(node *seed.ts*)",
-      "PowerShell(npm *seed*)",
-      "PowerShell(node *seed.ts*)"
-    ],
-    "deny": [
-      "Read(**/.env.local)",
-      "Edit(**/.env.local)",
-      "Edit(package-lock.json)"
-    ]
-  },
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/branch-check.mjs --warn",
-            "timeout": 20
-          },
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/preflight.mjs",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  }
+  "claudeMdExcludes": ["**/.claude/worktrees/**/CLAUDE.md"]
 }
