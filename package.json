@@ -37,7 +37,7 @@
     "concurrently": "10.0.6",
     "eslint": "9.39.5",
     "eslint-config-prettier": "10.1.8",
-    "fallow": "3.37.0",
+    "fallow": "3.38.0",
     "globals": "17.13.0",
     "playwright-core": "1.64.1",
     "prettier": "3.9.10",
