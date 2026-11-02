@@ -46,20 +46,19 @@ export const findUnusedAllowlist = ({ root, docs, allowlist }) => {
   return [...allowlist].filter((entry) => !used.has(entry));
 };
 
-export const trackedFiles = (root) => {
-  const { status, stdout, stderr, error } = spawnSync(
-    'git',
-    ['ls-files', '-z'],
-    {
-      cwd: root,
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-    }
-  );
-  if (status !== 0)
-    throw new Error(`git ls-files failed: ${error?.message ?? stderr}`);
-  return stdout.split('\0').filter(Boolean);
+export const runGit = (root, args, okStatuses = [0]) => {
+  const { status, stdout, stderr, error } = spawnSync('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (!okStatuses.includes(status))
+    throw new Error(`git ${args[0]} failed: ${error?.message ?? stderr}`);
+  return stdout;
 };
+
+export const trackedFiles = (root) =>
+  runGit(root, ['ls-files', '-z']).split('\0').filter(Boolean);
 
 export const isSuffixOf = (file, token) =>
   file === token || file.endsWith(`/${token}`);
