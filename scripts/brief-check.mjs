@@ -1,9 +1,6 @@
 /**
- * Prints the hit count of every identifier and file name a brief backticks, and
- * exits 1 when any has none. Run it before a brief goes to `sdd-implementer`
- * (`.claude/rules/repo/claims.md`); a 0 is a claim to check, not always a mistake.
- *
- *   node scripts/brief-check.mjs <brief.md>
+ * Usage: node scripts/brief-check.mjs <brief.md>
+ * Exit codes: 1 on a 0-hit name, 2 on a missing argument.
  */
 import { resolve } from 'node:path';
 import { checkBrief } from './brief-refs.mjs';
@@ -19,6 +16,7 @@ const rows = checkBrief({ root, briefPath: resolve(briefPath) });
 for (const { line, token, hits } of rows)
   console.log(`${briefPath}:${line} ${token} hits=${hits}`);
 const zero = rows.filter((row) => row.hits === 0);
-if (zero.length)
+if (zero.length) {
   console.error(`brief-check: ${zero.length} name(s) with 0 hits, check each`);
-process.exitCode = zero.length ? 1 : 0;
+  process.exitCode = 1;
+}

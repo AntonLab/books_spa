@@ -1,9 +1,7 @@
 /**
- * Counts how often each backticked identifier or file name of a brief appears
- * in the tracked code. A brief item that says a name exists, or is missing,
- * gets the number a `git grep` found, so a false claim shows up before the
- * dispatch. A name with 0 hits is not wrong by itself ("X is absent" is a
- * valid claim); it is the line the writer has to look at.
+ * Counts `git grep` hits for the names and paths a brief mentions.
+ * A name with 0 hits is not wrong by itself ("X is absent" is a valid
+ * claim); it is the line the writer has to look at.
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';

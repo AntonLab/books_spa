@@ -11,11 +11,3 @@ export const ILLUSTRATIONS_PER_CHAPTER_MAX = 20;
 export const ILLUSTRATION_CAPTION_MAX_LENGTH = 200;
 // Side of the square box an Illustration is fitted inside (px).
 export const ILLUSTRATION_BOX = 1600;
-// PATCH /api/illustrations/:id. Null (or blank) clears the caption.
-export interface UpdateIllustrationPayload {
-  caption: string | null;
-}
-// The chapter's whole order; see IllustrationRepository.reorder.
-export interface ReorderIllustrationsPayload {
-  illustrationIds: number[];
-}
