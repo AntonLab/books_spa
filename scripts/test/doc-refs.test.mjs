@@ -203,5 +203,12 @@ test('trackedFiles lists tracked paths and throws outside a repo', (t) => {
   assert.ok(trackedFiles(root).every((file) => file !== ''));
   const outside = mkdtempSync(join(tmpdir(), 'no-repo-'));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
+  // Stop git's upward search at the temp dir, so a repo above it cannot match.
+  const ceiling = process.env.GIT_CEILING_DIRECTORIES;
+  process.env.GIT_CEILING_DIRECTORIES = dirname(outside);
+  t.after(() => {
+    if (ceiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES;
+    else process.env.GIT_CEILING_DIRECTORIES = ceiling;
+  });
   assert.throws(() => trackedFiles(outside), /git ls-files failed/);
 });
