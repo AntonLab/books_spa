@@ -55,10 +55,7 @@ export async function readableBookWhere(viewer: Viewer): Promise<WhereOptions> {
 }
 
 // The single-book form of readableBookWhere.
-export async function canReadBook(
-  bookId: number,
-  viewer: Viewer
-): Promise<boolean> {
+async function canReadBook(bookId: number, viewer: Viewer): Promise<boolean> {
   const book = await Book.findOne({
     where: { [Op.and]: [{ id: bookId }, await readableBookWhere(viewer)] },
     attributes: ['id'],
