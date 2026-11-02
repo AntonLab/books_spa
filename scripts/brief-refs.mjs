@@ -1,4 +1,5 @@
 /**
+ * Counts `git grep` hits for the names and paths a brief mentions.
  * A name with 0 hits is not wrong by itself ("X is absent" is a valid
  * claim); it is the line the writer has to look at.
  */
