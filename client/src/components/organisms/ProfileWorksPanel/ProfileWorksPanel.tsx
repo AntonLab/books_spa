@@ -24,9 +24,9 @@ export const ProfileWorksPanel: FC<Props> = ({ scope, viewerId }) => {
   const navigate = useNavigate();
 
   // The inner tab lives in the URL (`?tab=series`) because each list keeps its
-  // filters there too. That departs from ADR-0010 for these two panels. Replacing
-  // the whole query string drops every filter, `page` and `pageSize`, so the
-  // other list never inherits them.
+  // filters there too. That departs from ADR-0010 for these two panels.
+  // Replacing the whole query string drops every filter, `page` and
+  // `pageSize`, so the other list never inherits them.
   const onChange = (key: string) =>
     setSearchParams(key === 'series' ? { tab: 'series' } : {});
 
