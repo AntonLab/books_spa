@@ -15,7 +15,7 @@ Rules live in `.claude/rules/server/`:
 | `permissions.md` | Roles, the permission matrix, account rank rules                                          |
 | `auth.md`        | sessions, login, password reset, CSRF                                                     |
 | `rate-limits.md` | sign-in, registration, password, upload and write budgets                                 |
-| `images.md`      | Covers and Avatars: storage, `sharp`, the six routes                                      |
+| `images.md`      | Covers and Avatars: storage, `sharp`, the nine routes                                     |
 | `sequelize.md`   | model typing, MySQL column and foreign-key choices, schema changes                        |
 | `testing.md`     | test layers, fakes and contracts, the MySQL-backed suites and their schemas               |
 | `seed.md`        | the demo seed                                                                             |
@@ -50,9 +50,9 @@ Scripts are in `package.json`; the traps:
 
 - `dev` restarts on `../shared/src` changes. Do not add `--watch-path`: it
   throws `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` on Linux.
-- `build` omits `*.spec.ts`, `*.testkit.ts` and `src/db/seed/`. `dist/` still
-  imports `shared` as `.ts`, so running it needs the workspace link and a
-  type-stripping Node (ADR-0006).
+- `build` omits `*.spec.ts`, `*.testkit.ts`, `*.typetest.ts` and
+  `src/db/seed/`. `dist/` still imports `shared` as `.ts`, so running it needs
+  the workspace link and a type-stripping Node (ADR-0006).
 - `npm run seed -- --force` **deletes every row in the content tables**
   (`CONTENT_MODELS` in `src/db/seed/seed.ts`), Covers and Avatars with them;
   without `--force` it only reports row counts.

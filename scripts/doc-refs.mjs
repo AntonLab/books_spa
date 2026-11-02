@@ -46,6 +46,26 @@ export const findUnusedAllowlist = ({ root, docs, allowlist }) => {
   return [...allowlist].filter((entry) => !used.has(entry));
 };
 
+export const runGit = (root, args, okStatuses = [0]) => {
+  const { status, stdout, stderr, error } = spawnSync('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (!okStatuses.includes(status))
+    throw new Error(`git ${args[0]} failed: ${error?.message ?? stderr}`);
+  return stdout;
+};
+
+export const trackedFiles = (root) =>
+  runGit(root, ['ls-files', '-z']).split('\0').filter(Boolean);
+
+export const isSuffixOf = (file, token) =>
+  file === token || file.endsWith(`/${token}`);
+
+export const isTrackedSuffix = (files, token) =>
+  files.some((file) => isSuffixOf(file, token));
+
 export const findMisses = ({ root, docs, allowlist = new Set() }) => {
   const paths = docs.map((doc) => doc.replace(/\\/g, '/'));
   // The allowlist and the doc-refs tests name stale tokens on purpose.
@@ -57,23 +77,13 @@ export const findMisses = ({ root, docs, allowlist = new Set() }) => {
   const cache = new Map();
 
   let files; // tracked paths, listed once and only when a file token needs them
-  const isTrackedSuffix = (token) => {
-    if (!files) {
-      const { status, stdout, stderr } = spawnSync('git', ['ls-files', '-z'], {
-        cwd: root,
-        encoding: 'utf8',
-        maxBuffer: 64 * 1024 * 1024,
-      });
-      if (status !== 0) throw new Error(`git ls-files failed: ${stderr}`);
-      files = stdout.split('\0');
-    }
-    return files.some((file) => file === token || file.endsWith(`/${token}`));
-  };
+  const isTracked = (token) =>
+    isTrackedSuffix((files ??= trackedFiles(root)), token);
 
   const exists = (token) => {
     if (token.includes('/'))
-      return existsSync(join(root, token)) || isTrackedSuffix(token);
-    if (FILE_NAME.test(token)) return isTrackedSuffix(token);
+      return existsSync(join(root, token)) || isTracked(token);
+    if (FILE_NAME.test(token)) return isTracked(token);
     const { status, stderr } = spawnSync(
       'git',
       ['grep', '-F', '-q', '-e', token, '--', '.', ...excludes],

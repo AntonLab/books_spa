@@ -3,10 +3,12 @@
 // runs this file: `npm run typecheck` compiles it, and a drift fails there as
 // `Type 'false' does not satisfy the constraint 'true'`.
 //
-// The check runs one way only, payload into `z.input`: the client may be
-// stricter than the server (it always sends `tags`, which the server would
-// default), but never send a key the schema does not know or omit one the
-// schema requires.
+// The check runs both ways. Payload into `z.input`: the client may be stricter
+// than the server (it always sends `tags`, which the server would default),
+// but never send a key the schema does not know or omit one the schema
+// requires. Schema keys into the payload: every key of `z.input` must be a key
+// of the payload, except those a pin lists in `Omitted` because the client
+// leaves them out on purpose.
 import type {
   AddReadingListItemPayload,
   CreateBookPayload,
@@ -15,14 +17,25 @@ import type {
   CreateFavoritePayload,
   CreateLikePayload,
   GenrePayload,
+  LoginPayload,
   ReadingListPayload,
+  RegisterPayload,
   ReorderReadingListItemsPayload,
   ReportPayload,
+  ResetConfirmPayload,
+  ResetRequestPayload,
   SeriesPayload,
   UpdateBookPayload,
   UpdateChapterPayload,
+  UpdateUserPayload,
 } from 'shared';
 import type { z } from 'zod';
+import type {
+  loginSchema,
+  registerSchema,
+  resetConfirmSchema,
+  resetRequestSchema,
+} from './auth.ts';
 import type { createBookSchema, updateBookSchema } from './book.ts';
 import type { createChapterSchema, updateChapterSchema } from './chapter.ts';
 import type { createCommentSchema } from './comment.ts';
@@ -37,14 +50,22 @@ import type {
 } from './readingList.ts';
 import type { createReportSchema } from './report.ts';
 import type { createSeriesSchema, updateSeriesSchema } from './series.ts';
+import type { updateUserSchema } from './user.ts';
 
 type Expect<T extends true> = T;
 
 // Distributes over a union payload, so each of its members must fit.
-type Fits<Payload, Schema extends z.ZodType> =
+// `Omitted` lists schema keys the client leaves out on purpose.
+type Fits<
+  Payload,
+  Schema extends z.ZodType,
+  Omitted extends PropertyKey = never,
+> =
   Payload extends z.input<Schema>
     ? keyof Payload extends keyof z.input<Schema>
-      ? true
+      ? Exclude<keyof z.input<Schema>, Omitted> extends keyof Payload
+        ? true
+        : false
       : false
     : false;
 
@@ -59,12 +80,33 @@ export type PayloadAssertions = [
   Expect<Fits<CreateCommentPayload, typeof createCommentSchema>>,
   Expect<Fits<GenrePayload, typeof genreBodySchema>>,
   Expect<Fits<CreateLikePayload, typeof createLikeSchema>>,
-  Expect<Fits<CreateFavoritePayload, typeof createFavoriteSchema>>,
+  // A one-target union: each member omits the other target.
+  Expect<
+    Fits<
+      CreateFavoritePayload,
+      typeof createFavoriteSchema,
+      'bookId' | 'seriesId'
+    >
+  >,
   Expect<Fits<ReadingListPayload, typeof createReadingListSchema>>,
   Expect<Fits<Partial<ReadingListPayload>, typeof updateReadingListSchema>>,
-  Expect<Fits<AddReadingListItemPayload, typeof addReadingListItemSchema>>,
+  // A one-target union: each member omits the other target.
+  Expect<
+    Fits<
+      AddReadingListItemPayload,
+      typeof addReadingListItemSchema,
+      'bookId' | 'seriesId'
+    >
+  >,
   Expect<
     Fits<ReorderReadingListItemsPayload, typeof reorderReadingListItemsSchema>
   >,
   Expect<Fits<ReportPayload, typeof createReportSchema>>,
+  Expect<Fits<UpdateUserPayload, typeof updateUserSchema, 'status'>>,
+  Expect<Fits<RegisterPayload, typeof registerSchema>>,
+  Expect<Fits<LoginPayload, typeof loginSchema>>,
+  Expect<Fits<ResetRequestPayload, typeof resetRequestSchema>>,
+  Expect<Fits<ResetConfirmPayload, typeof resetConfirmSchema>>,
+  // `status` stays out of UpdateUserPayload (see shared/src/user.ts).
+  Expect<'status' extends keyof UpdateUserPayload ? false : true>,
 ];

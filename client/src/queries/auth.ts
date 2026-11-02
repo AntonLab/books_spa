@@ -6,7 +6,7 @@ import {
 } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import * as authApi from '../api/auth';
-import type { LoginInput, RegisterInput } from '../api/auth';
+import type { LoginPayload, RegisterPayload } from 'shared';
 import { ApiError } from '../api/client';
 import { updateUser } from '../api/users';
 import { queryKeys } from './keys';
@@ -176,7 +176,7 @@ export function useSignedIn(): boolean {
 export const useLogin = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: LoginInput) => authApi.login(input),
+    mutationFn: (input: LoginPayload) => authApi.login(input),
     onSuccess: (user) => setSession(client, user),
   });
 };
@@ -184,7 +184,7 @@ export const useLogin = () => {
 export const useRegister = () => {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: RegisterInput) => authApi.register(input),
+    mutationFn: (input: RegisterPayload) => authApi.register(input),
     onSuccess: (user) => setSession(client, user),
   });
 };

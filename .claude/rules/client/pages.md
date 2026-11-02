@@ -88,7 +88,7 @@ Routing and the App shell: `routing.md`.
   Draft book; the Favorites star shows to Co-authors too, but not on a Draft.
   Below the Cover row sit four tabs: Chapters, Statistics, Comments and
   Reading lists, on every book, a Draft included. The open tab is antd's own
-  state (ADR-0010), never the URL, so a reload opens Chapters. The panel has
+  state, never the URL, so a reload opens Chapters. The panel has
   a fixed height (`appBookTabsHeight`, sized to Statistics at desktop width)
   and scrolls, so switching tabs never moves the comments; it is styled
   through Tabs' `classNames.body`, never a `:global` selector that would
@@ -117,8 +117,7 @@ Routing and the App shell: `routing.md`.
   `/profile/my-books`, the last labelled "My works"), since the account menu
   and the book and series editors open a given tab; the outer `Tabs` has
   `destroyOnHidden`. The inner Books/Series tabs of both panels live in
-  `?tab=series` (Books is never written), superseding ADR-0010's "inner tabs
-  are antd state" for these two panels only. My works hides the Author field
+  `?tab=series` (Books is never written). My works hides the Author field
   and ignores a typed `author`. A non-author on My works is redirected only
   after the session resolves, so an author reloading it stays.
 - The four profile list queries run only with a session user (why:

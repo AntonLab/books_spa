@@ -8,6 +8,9 @@ import {
   extractTokens,
   findMisses,
   findUnusedAllowlist,
+  isSuffixOf,
+  isTrackedSuffix,
+  trackedFiles,
 } from '../doc-refs.mjs';
 
 // A git repo whose tracked files are `files` (path -> content).
@@ -176,4 +179,36 @@ test('token boundary table', () => {
   const no = ['ab', 'AB', 'Ab', 'a', 'x.js', 'x.txt', 'x.TS', ''];
   for (const token of yes) assert.deepEqual(tokens(`\`${token}\``), [token]);
   for (const token of no) assert.deepEqual(tokens(`\`${token}\``), []);
+});
+
+test('isTrackedSuffix matches a whole path or a tail on a segment boundary', () => {
+  const files = ['server/src/db/config.ts', 'b.ts', ''];
+  assert.equal(isTrackedSuffix(files, 'b.ts'), true);
+  assert.equal(isTrackedSuffix(files, 'db/config.ts'), true);
+  assert.equal(isTrackedSuffix(files, 'server/src/db/config.ts'), true);
+  assert.equal(isTrackedSuffix(files, 'fig.ts'), false);
+  assert.equal(isTrackedSuffix(files, 'xb.ts'), false);
+  assert.equal(isTrackedSuffix([], 'b.ts'), false);
+});
+
+test('isSuffixOf matches one path against a token on a segment boundary', () => {
+  assert.equal(isSuffixOf('a/b.ts', 'a/b.ts'), true);
+  assert.equal(isSuffixOf('x/a/b.ts', 'a/b.ts'), true);
+  assert.equal(isSuffixOf('xb.ts', 'a/b.ts'), false);
+});
+
+test('trackedFiles lists tracked paths and throws outside a repo', (t) => {
+  const root = repo(t, { 'a/b.ts': 'x' });
+  assert.ok(trackedFiles(root).includes('a/b.ts'));
+  assert.ok(trackedFiles(root).every((file) => file !== ''));
+  const outside = mkdtempSync(join(tmpdir(), 'no-repo-'));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  // Stop git's upward search at the temp dir, so a repo above it cannot match.
+  const ceiling = process.env.GIT_CEILING_DIRECTORIES;
+  process.env.GIT_CEILING_DIRECTORIES = dirname(outside);
+  t.after(() => {
+    if (ceiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES;
+    else process.env.GIT_CEILING_DIRECTORIES = ceiling;
+  });
+  assert.throws(() => trackedFiles(outside), /git ls-files failed/);
 });

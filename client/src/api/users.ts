@@ -1,22 +1,12 @@
 import { request } from './client';
+import type { UpdateUserPayload } from 'shared';
 import type { PublicUser } from '../types/api';
 
 // The Account's own writes: its fields and its Avatar. Its own module, the way
 // authors.ts is.
-export interface AccountChanges {
-  login?: string;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  password?: string;
-  currentPassword?: string;
-  about?: string;
-  showLastSeen?: boolean;
-}
-
 export const updateUser = (
   userId: number,
-  changes: AccountChanges
+  changes: UpdateUserPayload
 ): Promise<PublicUser> => {
   return request<PublicUser>(`/users/${userId}`, {
     method: 'PATCH',
@@ -24,8 +14,7 @@ export const updateUser = (
   });
 };
 
-// A fixed body rather than a widened AccountChanges: only a Moderator may send
-// `status`, and the Account form must never offer it.
+// Fixed body: `status` is Moderator-only and absent from UpdateUserPayload.
 export const blockUser = (userId: number): Promise<PublicUser> => {
   return request<PublicUser>(`/users/${userId}`, {
     method: 'PATCH',

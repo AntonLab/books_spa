@@ -22,6 +22,19 @@ export interface PublicUser {
   updatedAt: Date;
 }
 
+// The Account's own writes. `status` is deliberately absent: it is
+// Moderator-only, and `blockUser` sends it inline.
+export interface UpdateUserPayload {
+  login?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  password?: string;
+  currentPassword?: string;
+  about?: string;
+  showLastSeen?: boolean;
+}
+
 // Where the emailed reset link lands: the server builds the link from it, and
 // the client routes it and reads the token there.
 export const PASSWORD_RESET_PATH = '/reset-password';

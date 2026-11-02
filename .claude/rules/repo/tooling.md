@@ -75,6 +75,7 @@ ships `uuid` >= 11.1.1. `braces` (via
   they rewrote; blocks on a surviving ESLint error; warnings pass.
 - Refuses a partially staged file, since re-staging the rewritten copy would
   pull its unstaged hunks into the commit.
+- When a `CLAUDE.md` or a rule is staged, also runs the doc scripts (see README).
 - If `node_modules/.bin` is missing it warns and lets the commit through.
 - `core.hooksPath` is per-clone; the root `prepare` script sets it
   (`git config core.hooksPath .githooks` by hand).
@@ -105,8 +106,8 @@ covers both separators.
 `check-doc-refs.mjs` fails on a backtick identifier in CLAUDE.md or a rule that no tracked file spells, or a file name or path that is no tail of a tracked path (`git ls-files`). Allowlist: `doc-refs-allowlist.txt`; an entry no doc uses fails too.
 It runs in `npm run lint` after `doc-limits` and in the pre-commit hook.
 `brief-check.mjs` (`npm run brief:check -- <brief.md>`) prints a `git grep`
-hit count per name, using `extractTokens` from `doc-refs.mjs`; the logic is in
-`brief-refs.mjs`.
+hit count per name, using `extractTokens`, `isSuffixOf` and `trackedFiles` from
+`doc-refs.mjs`; the logic is in `brief-refs.mjs`.
 `sdd-step.sh` finds the superpowers scripts by globbing the plugin cache for
 the newest version, so it needs no update when the plugin does.
 `layout-lint.mjs` (`npm run layout-lint`) is the one script with a dependency,

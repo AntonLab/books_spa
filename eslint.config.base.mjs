@@ -4,9 +4,9 @@
  * ESLint does not search ancestor directories for a flat config: run from
  * `client/` with no local config it reports "File ignored because no matching
  * configuration was supplied". So each package keeps its own
- * `eslint.config.mjs`, which calls `createConfig` from here. Only
- * `languageOptions` differ between the packages (browser globals and ES2020 vs
- * Node globals), so those stay in the package configs.
+ * `eslint.config.mjs`, which calls `createConfig` from here. The package
+ * configs set their own `languageOptions` (browser globals and ES2020 vs Node
+ * globals), and the client config also adds rules (see `client/CLAUDE.md`).
  *
  * The plugins are imported by bare specifier; `.claude/rules/repo/tooling.md`
  * says where each is declared.

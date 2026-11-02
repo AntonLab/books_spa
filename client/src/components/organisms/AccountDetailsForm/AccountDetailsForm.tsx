@@ -9,10 +9,10 @@ import {
   NAME_MAX_LENGTH,
   PASSWORD_MAX_LENGTH,
 } from 'shared';
+import type { UpdateUserPayload } from 'shared';
 import { loginForbiddenCharacterRule } from '@/constants/loginRule';
 import { maxLengthRule } from '@/constants/maxLengthRule';
 import { useUpdateAccount } from '@/queries/users';
-import type { AccountChanges } from '@/api/users';
 import { accountFieldErrors } from '@/types/accountErrors';
 import type { PublicUser } from '@/types/api';
 import spacing from '@/theme/spacing.module.css';
@@ -58,7 +58,7 @@ export const AccountDetailsForm: FC<{ user: PublicUser }> = ({ user }) => {
         ? [[name, value]]
         : [];
     })
-  ) as AccountChanges;
+  ) as UpdateUserPayload;
   const hasChanges = Object.keys(changes).length > 0;
   const emailChanged = 'email' in changes;
 

@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # One lockfile at the root covers both workspaces.
+  # One lockfile at the root covers every workspace.
   - package-ecosystem: npm
     directory: /
     schedule:
