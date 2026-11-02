@@ -15,14 +15,25 @@ import type {
   CreateFavoritePayload,
   CreateLikePayload,
   GenrePayload,
+  LoginPayload,
   ReadingListPayload,
+  RegisterPayload,
   ReorderReadingListItemsPayload,
   ReportPayload,
+  ResetConfirmPayload,
+  ResetRequestPayload,
   SeriesPayload,
   UpdateBookPayload,
   UpdateChapterPayload,
+  UpdateUserPayload,
 } from 'shared';
 import type { z } from 'zod';
+import type {
+  loginSchema,
+  registerSchema,
+  resetConfirmSchema,
+  resetRequestSchema,
+} from './auth.ts';
 import type { createBookSchema, updateBookSchema } from './book.ts';
 import type { createChapterSchema, updateChapterSchema } from './chapter.ts';
 import type { createCommentSchema } from './comment.ts';
@@ -37,6 +48,7 @@ import type {
 } from './readingList.ts';
 import type { createReportSchema } from './report.ts';
 import type { createSeriesSchema, updateSeriesSchema } from './series.ts';
+import type { updateUserSchema } from './user.ts';
 
 type Expect<T extends true> = T;
 
@@ -67,4 +79,11 @@ export type PayloadAssertions = [
     Fits<ReorderReadingListItemsPayload, typeof reorderReadingListItemsSchema>
   >,
   Expect<Fits<ReportPayload, typeof createReportSchema>>,
+  Expect<Fits<UpdateUserPayload, typeof updateUserSchema>>,
+  Expect<Fits<RegisterPayload, typeof registerSchema>>,
+  Expect<Fits<LoginPayload, typeof loginSchema>>,
+  Expect<Fits<ResetRequestPayload, typeof resetRequestSchema>>,
+  Expect<Fits<ResetConfirmPayload, typeof resetConfirmSchema>>,
+  // The Account form must never offer `status` (Moderator-only).
+  Expect<'status' extends keyof UpdateUserPayload ? false : true>,
 ];

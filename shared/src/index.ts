@@ -5,6 +5,7 @@
 // reaches the client bundle. See ADR-0006.
 export * from './account.ts';
 export * from './api.ts';
+export * from './auth.ts';
 export * from './book.ts';
 export * from './chapter.ts';
 export * from './comment.ts';
