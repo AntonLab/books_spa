@@ -32,17 +32,18 @@ function isModerator(viewer: Viewer): boolean {
   return isModeratorRole(viewer?.role);
 }
 
-// Listed is narrower than readable: a Draft book shows in exactly one list,
-// its own Co-author's `?userId=`, which is where "My books" finds it. Every
-// other list — a Moderator's included — leaves it out. null when the list may
-// hold drafts; readableBookWhere still decides which.
+const publishedBook: WhereOptions = { status: { [Op.ne]: 'draft' } };
+
+// Listed is narrower than readable: a Draft shows only in its own Co-author's
+// `?userId=` list ("My books"), never in another list, a Moderator's included.
+// null when the list may hold drafts; readableBookWhere still decides which.
 export function listedBookWhere(
   viewer: Viewer,
   userId: number | undefined
 ): WhereOptions | null {
   const listingOwnBooks =
     viewer !== null && userId !== undefined && userId === viewer.id;
-  return listingOwnBooks ? null : { status: { [Op.ne]: 'draft' } };
+  return listingOwnBooks ? null : publishedBook;
 }
 
 // The books a viewer may read, as a WHERE on `books`: every Published book,
@@ -79,10 +80,9 @@ export async function assertDraftRefusal(
 // Split from readableBookWhere so readableChapterScope, which needs the
 // credited ids twice, looks them up once.
 function readableBookWhereFor(credited: number[]): WhereOptions {
-  const published: WhereOptions = { status: { [Op.ne]: 'draft' } };
   return credited.length === 0
-    ? published
-    : { [Op.or]: [published, { id: credited }] };
+    ? publishedBook
+    : { [Op.or]: [publishedBook, { id: credited }] };
 }
 
 // An inner join on a row's `book` association, carrying no columns of its own:
@@ -118,8 +118,7 @@ export async function hiddenBooksSubquery(
 // has no status of its own; an empty or all-draft one simply has nothing a
 // reader could open yet.
 //
-// A subquery rather than an id list, because it grows with the whole
-// catalogue. It carries no caller-supplied value, so there is nothing to bind.
+// No caller-supplied value goes into the literal, so there is nothing to bind.
 export function publishedSeriesWhere(): WhereOptions {
   return {
     id: {
@@ -138,20 +137,10 @@ export async function visibleSeriesWhere(
   if (isModerator(viewer)) return {};
 
   const withPublishedBook = publishedSeriesWhere();
-  if (viewer === null) return withPublishedBook;
-
-  const credited = await SeriesAuthor.findAll({
-    where: { userId: viewer.id },
-    attributes: ['seriesId'],
-  });
+  const credited = await creditedSeriesIds(viewer);
   if (credited.length === 0) return withPublishedBook;
 
-  return {
-    [Op.or]: [
-      withPublishedBook,
-      { id: credited.map((credit) => credit.seriesId) },
-    ],
-  };
+  return { [Op.or]: [withPublishedBook, { id: credited }] };
 }
 
 // The viewer a request reads as. requirePermission sets req.user whenever a
@@ -194,4 +183,13 @@ async function creditedBookIds(viewer: Viewer): Promise<number[]> {
     attributes: ['bookId'],
   });
   return credits.map((credit) => credit.bookId);
+}
+
+async function creditedSeriesIds(viewer: Viewer): Promise<number[]> {
+  if (viewer === null) return [];
+  const credits = await SeriesAuthor.findAll({
+    where: { userId: viewer.id },
+    attributes: ['seriesId'],
+  });
+  return credits.map((credit) => credit.seriesId);
 }
