@@ -3,7 +3,6 @@ import { startAnnouncementPass } from './announcements/announcementPass.ts';
 import { createMailDelivery } from './delivery/mailDelivery.ts';
 import { loadConfig } from './db/config.ts';
 import { ensureDatabase } from './db/ensureDatabase.ts';
-import { assertNoPendingMigrations, createMigrator } from './db/migrator.ts';
 import { createSequelize } from './db/sequelize.ts';
 import { startExpiryPurge } from './expiryPurge.ts';
 import { logger, messageOf } from './logger.ts';
@@ -56,18 +55,9 @@ async function main(): Promise<void> {
     // database.
     await sequelize.authenticate();
 
-    const migrator = createMigrator(sequelize);
-    if (config.env !== 'production') {
-      const applied = await migrator.up();
-      if (applied.length > 0) {
-        logger.info(
-          'Applied migrations',
-          applied.map((migration) => migration.name)
-        );
-      }
-    } else {
-      await assertNoPendingMigrations(migrator);
-    }
+    // Creates missing tables and never alters an existing one: a model change
+    // reaches a database through /db-reset (ADR-0016).
+    await sequelize.sync();
 
     // The matrix is reference data derived from code, so it is written on every
     // boot and read back into memory. Requests do not depend on this — the store

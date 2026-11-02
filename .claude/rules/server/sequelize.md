@@ -71,19 +71,15 @@ paths:
   so an owner-less comment is never live.
 - `likes` points at exactly one of `bookId` / `commentId`. Sequelize 6 cannot
   declare the `CHECK`, so the XOR is enforced by a `.refine()` on
-  `createLikeSchema` and a model `validate`, and by a `CHECK` that migration
-  `0003-xor-checks.ts` adds (`sync()` emits none, so `schemaParity.spec.ts`
-  strips CHECK lines before comparing; `xorChecks.spec.ts` covers them). Both
-  targets are `ON DELETE CASCADE`, since `SET NULL` would produce the state the
-  XOR forbids, and `ON UPDATE RESTRICT`: MySQL refuses a `CHECK` on a column
-  whose foreign key has an `ON UPDATE` action (errno 3823).
+  `createLikeSchema` and a model `validate`; no database `CHECK` backs them
+  (ADR-0016). Both targets are `ON DELETE CASCADE`, since `SET NULL` would
+  produce the state the XOR forbids.
 - `likes` has unique indexes on `(userId, bookId)` and `(userId, commentId)`.
   NULLs are distinct in a unique index, so the two do not interfere. They also
   serve `?userId=`; a further index would cost every insert on the busiest
   table.
 - `favorites` copies the `likes` shape: exactly one of `bookId` / `seriesId`
-  (a `.refine()` on `createFavoriteSchema`, a model `validate` and the same
-  migration `CHECK`), unique `(userId, bookId)` and `(userId, seriesId)`, and
+  (a `.refine()` on `createFavoriteSchema` and a model `validate`), unique `(userId, bookId)` and `(userId, seriesId)`, and
   `ON DELETE CASCADE` on all three references. A duplicate insert is a `UniqueConstraintError`, which the
   repository maps to 409.
 - Creating a book or series maps a `ForeignKeyConstraintError` to
@@ -111,11 +107,9 @@ row, then credits), and `passwordResetRepository.replaceForUser` / `redeem`
 
 ## Changing a table's shape
 
-A schema change is a model change plus a new migration in
-`server/src/db/migrations/`, named `NNNN-name.ts` and `up` only (a rollback is a
-new migration; ADR-0015). An applied migration is never edited. Boot runs the
-pending ones outside production; production runs `npm run migrate -w server`
-first. `schemaParity.spec.ts` fails when a model and the migrations drift.
+There are no migrations (ADR-0016). Boot and the seed run `sequelize.sync()`,
+which creates a missing table and never alters an existing one. A schema change
+is a model change plus `/db-reset`.
 
 `permissions.module` is an `ENUM` built from `MODULES`, so adding a module
-needs a migration too.
+needs the same reset.

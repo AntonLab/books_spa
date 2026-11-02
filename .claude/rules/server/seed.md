@@ -63,5 +63,5 @@ answering "User Four" reads as a test run, not a demo). Personas are in
 ## Tests
 
 `plan.spec.ts` needs no database; nothing under `seed/` except `seed.ts` runs
-on import. `seed.spec.ts` runs the script as a child process and builds its
-schema with the migrations.
+on import. `seed.spec.ts` runs the script as a child process on a schema of its
+own.

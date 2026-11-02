@@ -51,11 +51,9 @@ paths:
   misconfiguration look like a deliberate 403.
 - `syncPermissions()` replaces the table wholesale in a transaction
   (destroy-then-`bulkCreate`; an upsert would leave orphan rows). It runs on
-  every boot, production included, while `sequelize.sync()` does not run in
-  production: **a production deploy must provision the schema first**
-  (`npm run migrate -w server`), or boot fails loudly. Deliberate.
+  every boot, right after `sequelize.sync()`.
 - `permissions.module` is a MySQL `ENUM` built from `MODULES`; a new module
-  needs the table recreated before the sync can insert its rows.
+  needs the table recreated (`/db-reset`) before the sync can insert its rows.
 
 ## Accounts
 

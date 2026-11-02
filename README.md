@@ -49,7 +49,8 @@ only ever talks to one origin in development.
 
 On start-up (outside `NODE_ENV=production`) the server creates the
 `books_spa` schema if it is missing and syncs the Sequelize models, so a
-clean MySQL install needs no manual migration step.
+clean MySQL install needs no manual setup. `sync()` never alters an existing
+table: after a model change, rebuild the dev database with `/db-reset`.
 
 ## Environment
 
