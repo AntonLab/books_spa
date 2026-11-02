@@ -32,3 +32,10 @@ the job it is built for.
   persistence built by hand.
 - **Keeping the auth modals in Redux until then.** The one slice held two
   fields, and three of its four transitions were plain `setState` calls.
+
+## Amendment (2026-11-02)
+
+The inner Books/Series tab of `ProfileWorksPanel` lives in the URL
+(`?tab=series`), not in component state, because each list keeps its filters
+in the query string too. This is the one place the "everything else stays in
+components" rule is bent; `.claude/rules/client/pages.md` records it.
