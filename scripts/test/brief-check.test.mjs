@@ -96,3 +96,42 @@ test('no argument exits 2 with usage', (t) => {
   assert.equal(result.status, 2);
   assert.match(result.stderr, /usage/);
 });
+
+test('a bare file name is matched by suffix', (t) => {
+  const result = run(sandbox(t, '`code.ts`\n'));
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /brief\.md:1 code\.ts hits=1/);
+});
+
+test('a token inside a fenced block is skipped', (t) => {
+  const result = run(sandbox(t, '```\n`goneName`\n```\n`liveName`\n'));
+  assert.equal(result.status, 0);
+  assert.doesNotMatch(result.stdout, /goneName/);
+  assert.match(result.stdout, /brief\.md:4 liveName hits=2/);
+});
+
+test('one live and one dead name print both and exit 1', (t) => {
+  const result = run(sandbox(t, '`liveName`\n`goneName`\n'));
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /liveName hits=2/);
+  assert.match(result.stdout, /goneName hits=0/);
+});
+
+test('a missing brief file exits 2 with one error line and no stack', (t) => {
+  const result = spawnSync(
+    process.execPath,
+    ['scripts/brief-check.mjs', 'nope.md'],
+    { cwd: sandbox(t, ''), encoding: 'utf8' }
+  );
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /brief-check: brief not found: .*nope\.md/);
+  assert.equal(result.stderr.trim().split('\n').length, 1);
+  assert.doesNotMatch(result.stderr, /\bat .*\(|node:internal|ENOENT/);
+});
+
+test('a backslash path counts like its slash form', (t) => {
+  const result = run(sandbox(t, '`src\\code.ts`\n`src\\gone.ts`\n'));
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /src\\code\.ts hits=1/);
+  assert.match(result.stdout, /src\\gone\.ts hits=0/);
+});

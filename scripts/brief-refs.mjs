@@ -4,7 +4,7 @@
  * claim); it is the line the writer has to look at.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
 import { extractTokens, isSuffixOf, trackedFiles } from './doc-refs.mjs';
 
@@ -24,7 +24,8 @@ const git = (root, args) => {
 // Matching lines in tracked files, or tracked paths ending in the token.
 const countHits = (root, token, files, briefPath) => {
   if (FILE_NAME.test(token)) {
-    return files.filter((file) => isSuffixOf(file, token)).length;
+    const slashed = token.replaceAll('\\', '/');
+    return files.filter((file) => isSuffixOf(file, slashed)).length;
   }
   // A tracked brief would count its own tokens, so leave it out.
   const rel = relative(root, briefPath).replaceAll('\\', '/');
@@ -37,6 +38,10 @@ const countHits = (root, token, files, briefPath) => {
 };
 
 export const checkBrief = ({ root, briefPath }) => {
+  if (!existsSync(briefPath)) {
+    console.error(`brief-check: brief not found: ${briefPath}`);
+    process.exit(2);
+  }
   const files = trackedFiles(root);
   const cache = new Map();
   const text = readFileSync(briefPath, 'utf8');

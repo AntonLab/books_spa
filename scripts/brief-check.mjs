@@ -1,6 +1,6 @@
 /**
  * Usage: node scripts/brief-check.mjs <brief.md>
- * Exit codes: 1 on a 0-hit name, 2 on a missing argument.
+ * Exit codes: 1 on a 0-hit name, 2 on a missing argument or brief file.
  */
 import { resolve } from 'node:path';
 import { checkBrief } from './brief-refs.mjs';
