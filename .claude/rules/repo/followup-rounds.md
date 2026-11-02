@@ -18,8 +18,9 @@ brief file. It runs the same chain as a plan task: `sdd-implementer`, then
   doc text overrides `CODING_STANDARDS.md` "Comments" for that text: say so in
   the reviewer dispatch, or every review repeats the same Minor.
 - **Follow-up lines a round fixed** are marked `[fixed: <sha>]` by the
-  controller as the round ends, so `/swarm:ship` finds no open line to ask
-  about.
+  controller, so `/swarm:ship` finds no open line to ask about. Mark a line the
+  moment a commit closes it, an audit fix included: a stale line gets copied
+  into the next brief as a defect that no longer exists.
 - **Review package without a plan:** pass the brief file where the plan goes,
   `bash scripts/sdd-step.sh review <brief.md> <BASE> [HEAD]`. It writes the
   diff under `.superpowers/sdd/<brief-name>/` and prints the path. Do not

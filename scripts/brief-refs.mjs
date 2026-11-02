@@ -15,7 +15,9 @@ import {
 const FILE_NAME = /\.(ts|tsx|mjs|md|json)$/;
 
 // Matching lines in tracked files, or tracked paths ending in the token.
-const countHits = (root, token, files, briefPath) => {
+const countHits = (root, rawToken, files, briefPath) => {
+  // `path.ts:40,76` and `./path.ts` name the file `path.ts`.
+  const token = rawToken.replace(/:\d+(?:[,-]\d+)*$/, '').replace(/^\.\//, '');
   if (FILE_NAME.test(token)) {
     const slashed = token.replaceAll('\\', '/');
     return files.filter((file) => isSuffixOf(file, slashed)).length;
