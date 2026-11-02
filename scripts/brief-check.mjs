@@ -12,7 +12,14 @@ if (!briefPath) {
   process.exit(2);
 }
 
-const rows = checkBrief({ root, briefPath: resolve(briefPath) });
+let rows;
+try {
+  rows = checkBrief({ root, briefPath: resolve(briefPath) });
+} catch (error) {
+  if (error.code !== 'BRIEF_NOT_FOUND') throw error;
+  console.error(`brief-check: ${error.message}`);
+  process.exit(2);
+}
 for (const { line, token, hits } of rows)
   console.log(`${briefPath}:${line} ${token} hits=${hits}`);
 const zero = rows.filter((row) => row.hits === 0);

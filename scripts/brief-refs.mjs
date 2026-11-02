@@ -36,10 +36,10 @@ const countHits = (root, token, files, briefPath) => {
 };
 
 export const checkBrief = ({ root, briefPath }) => {
-  if (!existsSync(briefPath)) {
-    console.error(`brief-check: brief not found: ${briefPath}`);
-    process.exit(2);
-  }
+  if (!existsSync(briefPath))
+    throw Object.assign(new Error(`brief not found: ${briefPath}`), {
+      code: 'BRIEF_NOT_FOUND',
+    });
   const files = trackedFiles(root);
   const cache = new Map();
   const text = readFileSync(briefPath, 'utf8');
