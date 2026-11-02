@@ -38,8 +38,8 @@ paths:
 - Both `GET`s send `Cache-Control: private, max-age=31536000, immutable`. Safe
   because `coverUrl` / `avatarUrl` carry `?v=<updatedAt ms>`, so a replace is
   never served stale.
-- A Cover is a field of the Book or the Series and an Avatar a field of the Account: no matrix
-  row of its own, last write wins, no Notification.
+- A Cover is a field of the Book or the Series and an Avatar a field of the
+  Account: no matrix row of its own, last write wins, no Notification.
 - `ACCEPTED_IMAGE_CONTENT_TYPES` and `IMAGE_MAX_BYTES` come from `shared`,
   because the client prechecks against the same limits.
 

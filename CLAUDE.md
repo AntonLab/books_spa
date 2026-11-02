@@ -50,8 +50,9 @@ Run from the repo root before commit; each fans out over every workspace
   `scripts/doc-limits.mjs` and `scripts/check-doc-refs.mjs`
 - `npm run format:check` (`npm run format`) — Prettier is root-only; no package
   defines a format script.
-- `npm test` — every workspace, then `test:scripts` (`scripts/test/*.test.mjs`). A green server run drops its test schemas through
-  `posttest`; a red one leaves them for inspection.
+- `npm test` — every workspace, then `test:scripts` (`scripts/test/*.test.mjs`).
+  A green server run drops its test schemas through `posttest`; a red one
+  leaves them for inspection.
 
 The pre-commit and commit-msg hooks are described in
 `.claude/rules/repo/tooling.md`; `git commit --no-verify` bypasses both.

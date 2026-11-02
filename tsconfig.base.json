@@ -1,7 +1,7 @@
 {
-  // Shared compiler options for every workspace. `client/`, `server/` and `shared/` extend
-  // this with a relative path, which is a file lookup rather than a module
-  // resolution, so it needs nothing installed.
+  // Shared compiler options for every workspace. `client/`, `server/` and
+  // `shared/` extend this with a relative path, which is a file lookup rather
+  // than a module resolution, so it needs nothing installed.
   //
   // Only options with the same value in every package belong here. Note that
   // `include`, `exclude` and `paths` must NOT: TypeScript resolves those
