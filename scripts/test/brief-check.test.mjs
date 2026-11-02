@@ -31,10 +31,11 @@ const sandbox = (t, brief) => {
   return repo;
 };
 
-const run = (repo) =>
-  spawnSync(process.execPath, ['scripts/brief-check.mjs', 'brief.md'], {
+const run = (repo, { args = ['brief.md'], env } = {}) =>
+  spawnSync(process.execPath, ['scripts/brief-check.mjs', ...args], {
     cwd: repo,
     encoding: 'utf8',
+    env,
   });
 
 test('a name in the code prints its line count and passes', (t) => {
@@ -65,15 +66,9 @@ test('an untracked file named in the brief reports hits=0', (t) => {
 });
 
 test('a missing git exits non-zero naming git, not a TypeError', (t) => {
-  const result = spawnSync(
-    process.execPath,
-    ['scripts/brief-check.mjs', 'brief.md'],
-    {
-      cwd: sandbox(t, '`liveName`\n'),
-      encoding: 'utf8',
-      env: { ...process.env, PATH: '', Path: '' },
-    }
-  );
+  const result = run(sandbox(t, '`liveName`\n'), {
+    env: { ...process.env, PATH: '', Path: '' },
+  });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /git/);
   assert.doesNotMatch(result.stderr, /TypeError/);
@@ -88,11 +83,7 @@ test('a tracked brief does not match its own tokens', (t) => {
 });
 
 test('no argument exits 2 with usage', (t) => {
-  const repo = sandbox(t, '');
-  const result = spawnSync(process.execPath, ['scripts/brief-check.mjs'], {
-    cwd: repo,
-    encoding: 'utf8',
-  });
+  const result = run(sandbox(t, ''), { args: [] });
   assert.equal(result.status, 2);
   assert.match(result.stderr, /usage/);
 });
@@ -118,11 +109,7 @@ test('one live and one dead name print both and exit 1', (t) => {
 });
 
 test('a missing brief file exits 2 with one error line and no stack', (t) => {
-  const result = spawnSync(
-    process.execPath,
-    ['scripts/brief-check.mjs', 'nope.md'],
-    { cwd: sandbox(t, ''), encoding: 'utf8' }
-  );
+  const result = run(sandbox(t, ''), { args: ['nope.md'] });
   assert.equal(result.status, 2);
   assert.match(result.stderr, /brief-check: brief not found: .*nope\.md/);
   assert.equal(result.stderr.trim().split('\n').length, 1);
