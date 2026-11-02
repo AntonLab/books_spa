@@ -43,10 +43,11 @@ code alone does not explain.
   `current`. Every other paged list keeps `limit` / `offset` and
   `ListResponse`; a short list served whole (Genres, authors, a series'
   books) answers `ItemsResponse`, checked with `satisfies` at `res.json`.
-- Exception to the rule above: the library and reading-list lists also take
-  `current` / `pageSize`. The repository answers `{ items, total }` and the
-  controller echoes `current` / `pageSize`. A page past the end is an empty
-  list: no clamp to the last page, unlike books.
+- Exception to the `GET /api/books` paging rule: the library and reading-list
+  lists take `current` / `pageSize` instead of `limit` / `offset`. The
+  repository answers `{ items, total }`; the controller echoes `current` /
+  `pageSize`. A page past the end is an empty list, not clamped to the last
+  page.
 - `?sort=popular|new|updated` ranks by Popularity, Release time or Last update
   (CONTEXT.md), best first, ties to the higher id, overriding Series order.
   Each is a correlated subquery on the book row; `new` and `updated` drop a
