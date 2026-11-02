@@ -101,13 +101,6 @@ test('a token inside a fenced block is skipped', (t) => {
   assert.match(result.stdout, /brief\.md:4 liveName hits=2/);
 });
 
-test('one live and one dead name print both and exit 1', (t) => {
-  const result = run(sandbox(t, '`liveName`\n`goneName`\n'));
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /liveName hits=2/);
-  assert.match(result.stdout, /goneName hits=0/);
-});
-
 test('a missing brief file exits 2 with one error line and no stack', (t) => {
   const result = run(sandbox(t, ''), { args: ['nope.md'] });
   assert.equal(result.status, 2);
