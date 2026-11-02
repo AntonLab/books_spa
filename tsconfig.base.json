@@ -1,9 +1,9 @@
 {
-  // Shared compiler options for both workspaces. `client/` and `server/` extend
+  // Shared compiler options for every workspace. `client/`, `server/` and `shared/` extend
   // this with a relative path, which is a file lookup rather than a module
   // resolution, so it needs nothing installed.
   //
-  // Only options with the same value in both packages belong here. Note that
+  // Only options with the same value in every package belong here. Note that
   // `include`, `exclude` and `paths` must NOT: TypeScript resolves those
   // relative to the file that declares them, so listing `src` here would point
   // every package at the repo root's `src`. Keep them in the package configs.
