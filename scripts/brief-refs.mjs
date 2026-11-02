@@ -6,7 +6,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
-import { extractTokens } from './doc-refs.mjs';
+import { extractTokens, isTrackedSuffix, trackedFiles } from './doc-refs.mjs';
 
 const FILE_NAME = /\.(ts|tsx|mjs|md|json)$/;
 
@@ -24,8 +24,7 @@ const git = (root, args) => {
 // Matching lines in tracked files, or tracked paths ending in the token.
 const countHits = (root, token, files, briefPath) => {
   if (FILE_NAME.test(token)) {
-    return files.filter((file) => file === token || file.endsWith(`/${token}`))
-      .length;
+    return files.filter((file) => isTrackedSuffix([file], token)).length;
   }
   // A tracked brief would count its own tokens, so leave it out.
   const rel = relative(root, briefPath).replaceAll('\\', '/');
@@ -38,7 +37,7 @@ const countHits = (root, token, files, briefPath) => {
 };
 
 export const checkBrief = ({ root, briefPath }) => {
-  const files = git(root, ['ls-files', '-z']).split('\0');
+  const files = trackedFiles(root);
   const cache = new Map();
   const text = readFileSync(briefPath, 'utf8');
   return extractTokens(text).map(({ line, token }) => {
