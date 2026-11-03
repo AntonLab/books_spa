@@ -15,11 +15,11 @@ import {
   type bookCapabilities,
 } from '@/types/capabilities';
 import type { BookDetail } from '@/types/book';
-import type { PublicUser } from '@/types/api';
+import type { SessionUser } from '@/types/api';
 
 interface BookActionsProps {
   book: BookDetail;
-  session: PublicUser | null | undefined;
+  session: SessionUser | null | undefined;
   capabilities: ReturnType<typeof bookCapabilities>;
   onEdit: () => void;
 }

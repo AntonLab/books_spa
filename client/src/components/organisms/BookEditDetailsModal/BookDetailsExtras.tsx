@@ -6,11 +6,11 @@ import { DELETE_BOOK_CONFIRM } from '@/constants/deleteWork';
 import { useDeleteBook } from '@/queries/books';
 import { bookCapabilities } from '@/types/capabilities';
 import type { BookDetail } from '@/types/book';
-import type { PublicUser } from '@/types/api';
+import type { SessionUser } from '@/types/api';
 
 interface BookDetailsExtrasProps {
   book: BookDetail;
-  session: PublicUser;
+  session: SessionUser;
   onGone: () => void;
 }
 

@@ -10,7 +10,7 @@ import {
   useSeriesBooks,
 } from '@/queries/series';
 import { BOOK_STATUS_COLORS, BOOK_STATUS_LABELS } from '@/types/book';
-import type { PublicUser, SeriesBookSummary } from '@/types/api';
+import type { SeriesBookSummary, SessionUser } from '@/types/api';
 import { bookCapabilities } from '@/types/capabilities';
 import spacing from '@/theme/spacing.module.css';
 
@@ -21,7 +21,7 @@ interface SeriesOrderListProps {
   // component fetched itself would re-open the query before the permission is
   // known.
   mayEdit: boolean;
-  session: PublicUser;
+  session: SessionUser;
 }
 
 export const SeriesOrderList: FC<SeriesOrderListProps> = ({

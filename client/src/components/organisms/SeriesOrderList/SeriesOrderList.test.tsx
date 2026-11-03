@@ -7,7 +7,8 @@ import { ApiError } from '@/api/client';
 import * as seriesApi from '@/api/series';
 import * as booksApi from '@/api/books';
 import { waitPastDebounce } from '@/test/waitPastDebounce';
-import type { PublicUser, SeriesBookSummary } from '@/types/api';
+import { sessionOf } from '@/test/session';
+import type { PublicUser, SeriesBookSummary, SessionUser } from '@/types/api';
 import type { PublicBook } from '@/types/book';
 
 jest.mock('@/api/series');
@@ -33,16 +34,17 @@ const cora = {
   avatarUrl: null,
 };
 
-const sessionOf = (role: PublicUser['role']): PublicUser => ({
-  ...ann,
-  email: 'ann@example.com',
-  role,
-  status: 'active',
-  about: '',
-  showLastSeen: true,
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
-});
+const sessionFor = (role: PublicUser['role']): SessionUser =>
+  sessionOf({
+    ...ann,
+    email: 'ann@example.com',
+    role,
+    status: 'active',
+    about: '',
+    showLastSeen: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  });
 
 const bookNamed = (
   id: number,
@@ -56,14 +58,14 @@ const listing = (items: SeriesBookSummary[]) => ({ items });
 const renderList = (
   overrides: Partial<{
     mayEdit: boolean;
-    session: PublicUser;
+    session: SessionUser;
   }> = {}
 ) =>
   renderWithProviders(
     <SeriesOrderList
       seriesId={7}
       mayEdit
-      session={sessionOf('author')}
+      session={sessionFor('author')}
       {...overrides}
     />
   );
@@ -135,7 +137,7 @@ describe('SeriesOrderList', () => {
     mockedSeries.listSeriesBooks.mockResolvedValue(
       listing([bookNamed(2, 'Someone Else’s Draft', 'draft', [cora])])
     );
-    renderList({ session: { ...sessionOf('admin'), id: 99 } });
+    renderList({ session: { ...sessionFor('admin'), id: 99 } });
 
     expect(
       await screen.findByRole('link', { name: 'Someone Else’s Draft' })

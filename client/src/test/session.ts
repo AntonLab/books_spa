@@ -5,8 +5,8 @@ import { createTestQueryClient } from '@/test/queryClient';
 import { queryKeys } from '@/queries/keys';
 import type { PublicUser, SessionUser } from '@/types/api';
 
-// Mimics the server's permission matrix for the one scope the client reads
-// (users:update); every other cell is 'none'.
+// Mimics the server's permission matrix for the three scopes the client reads
+// (users:update, books:update, series:update); every other cell is 'none'.
 export const permissionsOf = (
   role: UserRole,
   usersUpdate?: PermissionScope
@@ -19,6 +19,13 @@ export const permissionsOf = (
   ) as SessionPermissions;
   permissions.users.update =
     usersUpdate ?? (isModeratorRole(role) ? 'any' : 'own');
+  const workUpdate: PermissionScope = isModeratorRole(role)
+    ? 'any'
+    : role === 'author'
+      ? 'own'
+      : 'none';
+  permissions.books.update = workUpdate;
+  permissions.series.update = workUpdate;
   return permissions;
 };
 
