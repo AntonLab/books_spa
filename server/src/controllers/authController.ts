@@ -46,7 +46,6 @@ export function createAuthController(deps: AuthControllerDeps) {
         validatedBody<LoginInput>(req),
         typeof previous === 'string' && previous.length > 0 ? previous : null
       );
-      // Set only after the module resolved: a refused login sets no cookie.
       setSessionCookie(res, token);
       res.json(toSession(user));
     },

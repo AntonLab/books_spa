@@ -42,7 +42,7 @@ export interface AccountSession {
     input: LoginInput,
     previousToken: string | null
   ): Promise<OpenedSession>;
-  // Resolves after the detached chain; never rejects, failures are logged.
+  // Resolves once lookup, token write and mail hand-off finish; never rejects, failures are logged.
   requestReset(email: string): Promise<void>;
   confirmReset(token: string, password: string): Promise<void>;
 }
@@ -143,9 +143,7 @@ export function createAccountSession(deps: AccountSessionDeps): AccountSession {
       return { user, token };
     },
 
-    // The controller sends the 202 before calling this, so awaiting it cannot
-    // delay the response. A failure cannot become a 500 that leaks the same
-    // signal. Log policy: .claude/rules/server/auth.md.
+    // Never rejects: the controller has already sent the 202. Log policy: .claude/rules/server/auth.md.
     requestReset: async (email) => {
       try {
         // a tick later, so the 202 call returns before the lookup starts

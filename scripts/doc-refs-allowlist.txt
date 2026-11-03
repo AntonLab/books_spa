@@ -36,6 +36,7 @@ AntonLab/custom-agents-swarm
 
 # Properties, columns and methods (Type.member, table.column) whose parent is a real
 # type or table. The member alone is found in code, the dotted form is not.
+AccountSessionDeps.verify
 BookDetail.commentCount
 BookDetail.favoriteCount
 DataTypes.JSONB

@@ -38,7 +38,7 @@ paths:
 
 ## Login
 
-- Sign-in and reset rules live in `accountSession.ts`; the controller keeps parsing, cookies and the response (the 202 goes out before the module is called).
+- Sign-in and reset rules live in `accountSession.ts`. The controller keeps parsing, cookies and the response.
 - **Sign-in takes a login or an email** in the one `login` field. An `@` in the
   value picks the column: with one it is an email (case-insensitive,
   accent-sensitive), without one a login (case-sensitive). A login may not
@@ -48,8 +48,8 @@ paths:
 - **One answer to two questions**: an unknown login or email and a wrong
   password give the same 401, and the unknown-login path spends an argon2
   verify on a cached dummy hash so timing cannot tell them apart.
-  `accountSession.spec.ts` drives the `verify` seam: a wall-clock assertion
-  would flake, and an ESM binding cannot be spied on.
+  `accountSession.spec.ts` drives the `verify` seam (rationale at
+  `AccountSessionDeps.verify` in `accountSession.ts`).
 - A blocked account is checked **after** the password, or the 403 would confirm
   the account to someone without it.
 - **A login in flight cannot outlive a block or a password change.** argon2 is

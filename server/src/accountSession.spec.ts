@@ -164,7 +164,6 @@ function setup(
   };
 }
 
-// The session expiry the fake received is SESSION_TTL_MS from now, within 5 s.
 function assertSessionTtl(expiresAt: Date | undefined, before: number) {
   const ttl = (expiresAt?.getTime() ?? 0) - before;
   assert.ok(ttl >= SESSION_TTL_MS && ttl < SESSION_TTL_MS + 5_000);
