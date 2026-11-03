@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -79,6 +80,58 @@ const run = ({ repo, home }, ...args) =>
     encoding: 'utf8',
     env: { ...process.env, HOME: home },
   });
+
+const FOLLOWUPS = 'followups.md';
+const mark = ({ repo, home }, ...args) =>
+  spawnSync('bash', ['scripts/sdd-step.sh', 'mark', FOLLOWUPS, ...args], {
+    cwd: repo,
+    encoding: 'utf8',
+    env: { ...process.env, HOME: home },
+  });
+const followups = (box, text) => {
+  writeFileSync(join(box.repo, FOLLOWUPS), text);
+  return () => readFileSync(join(box.repo, FOLLOWUPS), 'utf8');
+};
+
+test('sdd-step mark appends the sha to the line', (t) => {
+  const box = sandbox(t);
+  const read = followups(box, '- one\n- two\n- three\n');
+  const result = mark(box, '2', 'abc1234');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(read(), '- one\n- two [fixed: abc1234]\n- three\n');
+});
+
+test('sdd-step mark appends the note after the sha', (t) => {
+  const box = sandbox(t);
+  const read = followups(box, '- one\n- two\n');
+  const result = mark(box, '1', 'abc1234', 'audit fix');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(read(), '- one [fixed: abc1234, audit fix]\n- two\n');
+});
+
+test('sdd-step mark refuses a line already marked', (t) => {
+  const box = sandbox(t);
+  for (const line of ['- one [fixed: aaa1111]', '- one [dropped: minor]']) {
+    const text = `${line}\n- two\n`;
+    const read = followups(box, text);
+    const result = mark(box, '1', 'abc1234');
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /already/);
+    assert.equal(read(), text);
+  }
+});
+
+test('sdd-step mark refuses a missing line and a missing file', (t) => {
+  const box = sandbox(t);
+  followups(box, '- one\n- two\n');
+  const past = mark(box, '3', 'abc1234');
+  assert.notEqual(past.status, 0);
+  assert.match(past.stderr, /no line 3/);
+  rmSync(join(box.repo, FOLLOWUPS));
+  const gone = mark(box, '1', 'abc1234');
+  assert.notEqual(gone.status, 0);
+  assert.match(gone.stderr, /no such file/);
+});
 
 test('sdd-step next writes the brief of an existing task', (t) => {
   const box = sandbox(t);

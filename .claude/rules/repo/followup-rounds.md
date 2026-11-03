@@ -20,7 +20,17 @@ brief file. It runs the same chain as a plan task: `sdd-implementer`, then
 - **Follow-up lines a round fixed** are marked `[fixed: <sha>]` by the
   controller, so `/swarm:ship` finds no open line to ask about. Mark a line the
   moment a commit closes it, an audit fix included: a stale line gets copied
-  into the next brief as a defect that no longer exists.
+  into the next brief as a defect that no longer exists. Mark with
+  `bash scripts/sdd-step.sh mark <followups.md> <line> <sha> [note]`; it
+  refuses a line already marked `[fixed:` or `[dropped`.
+- **`git status` never shows a followups edit.** The `*-followups.md` files sit
+  under git-ignored `docs/superpowers/`, so check them with `Read`, not `git diff`.
+- **`Fixes #<n>` lines come from the queue file.** Read
+  `docs/superpowers/queue/YYYY-MM-DD-<name>.json` (issues with `status` `done`),
+  not the commit subjects.
+- **A mutation check in an implementer report names the failing test and the
+  command.** A bare `actual/expected` line cannot be confirmed by the reviewer
+  (issue #325 tracks a `mutate` script).
 - **Review package without a plan:** pass the brief file where the plan goes,
   `bash scripts/sdd-step.sh review <brief.md> <BASE> [HEAD]`. It writes the
   diff under `.superpowers/sdd/<brief-name>/` and prints the path. Do not
