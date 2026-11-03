@@ -19,11 +19,9 @@ export const permissionsOf = (
   ) as SessionPermissions;
   permissions.users.update =
     usersUpdate ?? (isModeratorRole(role) ? 'any' : 'own');
-  const workUpdate: PermissionScope = isModeratorRole(role)
-    ? 'any'
-    : role === 'author'
-      ? 'own'
-      : 'none';
+  let workUpdate: PermissionScope = 'none';
+  if (isModeratorRole(role)) workUpdate = 'any';
+  else if (role === 'author') workUpdate = 'own';
   permissions.books.update = workUpdate;
   permissions.series.update = workUpdate;
   return permissions;

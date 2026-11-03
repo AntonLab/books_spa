@@ -384,6 +384,23 @@ test('an accented lookalike of a registered email answers the same 401 as an unk
   });
 });
 
+test('POST /login refuses a blocked account with a 403', async () => {
+  const { deps, users } = authDeps();
+  await withApp(deps, async (base) => {
+    const { id } = await json<PublicUser>(
+      await post(base, 'register', registration)
+    );
+    await users.update(id, { status: 'blocked' });
+
+    const response = await post(base, 'login', {
+      login: 'Bob',
+      password: 'hunter2hunter2',
+    });
+
+    assert.equal(response.status, 403);
+  });
+});
+
 test('POST /login stores only the hash of the session token', async () => {
   const { deps, sessions } = authDeps();
   await withApp(deps, async (base) => {

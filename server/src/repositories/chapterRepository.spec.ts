@@ -331,15 +331,10 @@ describe('chapterRepository against real MySQL', { skip }, () => {
       [...((await repository.findCoAuthorIds(chapter.id)) ?? [])].sort(),
       [ownerId, coAuthorId].sort()
     );
-    assert.deepEqual(
-      [...((await repository.findBookCoAuthorIds(sharedBookId)) ?? [])].sort(),
-      [ownerId, coAuthorId].sort()
-    );
   });
 
-  test('a missing chapter or book has no co-authors to report', async () => {
+  test('a missing chapter has no co-authors to report', async () => {
     assert.equal(await repository.findCoAuthorIds(999_999), null);
-    assert.equal(await repository.findBookCoAuthorIds(999_999), null);
   });
 
   test('a chapter is saved as a draft, published now, or scheduled for later', async () => {

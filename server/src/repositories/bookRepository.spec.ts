@@ -510,24 +510,6 @@ describe('bookRepository against real MySQL', { skip }, () => {
     assert.equal(await repository.findCoAuthorIds(created.id + 10_000), null);
   });
 
-  // What filing a book into a series asks (bookController.assertMayAddToSeries).
-  test('findSeriesCoAuthorIds lists the series co-authors in credit order, and null for a missing series', async () => {
-    const coAuthorId = (await User.create({ ...coAuthor, role: 'author' })).id;
-    const shared = await createCreditedSeries(
-      { title: 'Shared Series', description: 'x', tags: [] },
-      [coAuthorId, ownerId]
-    );
-
-    assert.deepEqual(await repository.findSeriesCoAuthorIds(shared.id), [
-      coAuthorId,
-      ownerId,
-    ]);
-    assert.equal(
-      await repository.findSeriesCoAuthorIds(shared.id + 10_000),
-      null
-    );
-  });
-
   // Only the unique index's rejection means "already credited". An account
   // deleted between the lookup and the insert fails the foreign key instead,
   // which is answered as 404 on the user, not as a misleading 409.

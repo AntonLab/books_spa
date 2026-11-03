@@ -326,17 +326,12 @@ function resetSetup(
     appBaseUrl: BASE,
     verify: async () => true,
   });
-  return {
-    module,
-    replaceCalls,
-    redeemCalls,
-    requestReset: module.requestReset,
-  };
+  return { module, replaceCalls, redeemCalls };
 }
 
 test('requestReset does no account work before the first tick', async () => {
   const events: string[] = [];
-  const p = resetSetup(events).requestReset('racer@example.com');
+  const p = resetSetup(events).module.requestReset('racer@example.com');
   assert.deepEqual(events, []);
   await p;
   assert.deepEqual(events, ['lookup', 'replace', 'send']);
@@ -344,7 +339,7 @@ test('requestReset does no account work before the first tick', async () => {
 
 test('an unknown address looks up and does no token work', async () => {
   const events: string[] = [];
-  await resetSetup(events).requestReset('nobody@example.com');
+  await resetSetup(events).module.requestReset('nobody@example.com');
   assert.deepEqual(events, ['lookup']);
 });
 
@@ -365,7 +360,9 @@ for (const [name, overrides] of [
   test(`${name} that fails is logged by name only and never rejects`, async (t) => {
     const lines = recordLogs(t);
     const events: string[] = [];
-    await resetSetup(events, overrides).requestReset('racer@example.com');
+    await resetSetup(events, overrides).module.requestReset(
+      'racer@example.com'
+    );
     assert.equal(events.includes('send'), false);
     assert.deepEqual(lines, [
       {
@@ -380,7 +377,9 @@ for (const [name, overrides] of [
 
 test('a rejected mail send is logged once, requestReset still resolves, no address in the line', async (t) => {
   const lines = recordLogs(t);
-  await resetSetup([], { mailFails: true }).requestReset('racer@example.com');
+  await resetSetup([], { mailFails: true }).module.requestReset(
+    'racer@example.com'
+  );
   await flushDetached();
   assert.deepEqual(lines, [
     {

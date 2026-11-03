@@ -32,6 +32,7 @@ const MODERATOR = viewer(3, 'any');
 const WORK = { authors: [{ id: 1 }] };
 
 // viewer, status, isCoAuthor, mayEdit, mayLike, mayRead, mayFavorite, mayKeepInLibrary
+// prettier-ignore
 const BOOK_CASES = [
   ['a Guest', null, 'complete', false, false, false, true, false, false],
   ['a Guest', null, 'draft', false, false, false, false, false, false],
@@ -40,61 +41,11 @@ const BOOK_CASES = [
   ['a Co-author', CO_AUTHOR, 'draft', true, true, false, true, false, false],
   ['a reader', READER, 'in_progress', false, false, true, true, true, true],
   ['a reader', READER, 'draft', false, false, false, false, false, true],
-  [
-    'own, not credited',
-    viewer(2, 'own'),
-    'complete',
-    false,
-    false,
-    true,
-    true,
-    true,
-    true,
-  ],
-  [
-    'any, not credited',
-    MODERATOR,
-    'complete',
-    false,
-    true,
-    true,
-    true,
-    true,
-    true,
-  ],
-  [
-    'any, not credited',
-    MODERATOR,
-    'draft',
-    false,
-    true,
-    false,
-    true,
-    false,
-    true,
-  ],
-  [
-    'any and credited',
-    viewer(1, 'any'),
-    'complete',
-    true,
-    true,
-    false,
-    true,
-    false,
-    false,
-  ],
-  [
-    'credited, scope none',
-    viewer(1, 'none'),
-    'draft',
-    true,
-    false,
-    false,
-    false,
-    false,
-    false,
-  ],
+  ['own, not credited', viewer(2, 'own'), 'complete', false, false, true, true, true, true],
+  ['any, not credited', MODERATOR, 'complete', false, true, true, true, true, true],
+  ['any, not credited', MODERATOR, 'draft', false, true, false, true, false, true],
+  ['any and credited', viewer(1, 'any'), 'complete', true, true, false, true, false, false],
+  ['credited, scope none', viewer(1, 'none'), 'draft', true, false, false, false, false, false],
 ] as const;
 
 for (const [
@@ -144,6 +95,12 @@ test('a series has no Draft: a reader may read, favorite and keep it', () => {
   assert.equal(access.mayRead, true);
   assert.equal(access.mayFavorite, true);
   assert.equal(access.mayKeepInLibrary, true);
+});
+
+test('a series is never a Draft, whatever status the subject carries', () => {
+  const access = workAccess('series', READER, { ...WORK, status: 'draft' });
+  assert.equal(access.mayRead, true);
+  assert.equal(access.mayFavorite, true);
 });
 
 test('credits: none, one match and a second Co-author', () => {

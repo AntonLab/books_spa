@@ -20,7 +20,6 @@ import {
   genreOf,
   loadGenres,
 } from './genreRepository.ts';
-import { findSeriesCoAuthorIds } from './seriesRepository.ts';
 import {
   listedBookWhere,
   readableBookWhere,
@@ -99,10 +98,6 @@ export interface BookRepository {
   // The cheapest question the ownership check can ask: one indexed lookup, no
   // eager loads, no serialisation. null when the book is not there.
   findCoAuthorIds(id: number): Promise<number[] | null>;
-  // The same question about the series a book is being filed under, asked
-  // before the write — mirrors chapterRepository.findBookCoAuthorIds one level
-  // up. null when the series is not there.
-  findSeriesCoAuthorIds(seriesId: number): Promise<number[] | null>;
   // The series editor's list: every book filed in the series, drafts included,
   // in Series order. Kept here rather than in seriesRepository because it reads
   // and writes books, as chapterRepository owns a book's chapter order. null
@@ -849,8 +844,6 @@ export function createSequelizeBookRepository(): BookRepository {
       const book = await Book.findByPk(id, { attributes: ['id'] });
       return book ? creditedIds(credits, id) : null;
     },
-
-    findSeriesCoAuthorIds,
 
     async listInSeries(seriesId) {
       const series = await Series.findByPk(seriesId, { attributes: ['id'] });

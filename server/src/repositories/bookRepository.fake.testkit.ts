@@ -311,11 +311,6 @@ export function createFakeBookRepository(
       return ids ? [...ids] : null;
     },
 
-    async findSeriesCoAuthorIds(seriesId) {
-      const found = series.get(seriesId);
-      return found ? [...found.coAuthorIds] : null;
-    },
-
     async listInSeries(seriesId) {
       if (!series.has(seriesId)) return null;
       return inSeriesOrder(seriesId).map((row) => {

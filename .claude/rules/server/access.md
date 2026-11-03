@@ -36,7 +36,8 @@ Notifications, comment tombstones).
   or an absent key touches no series and needs no check.
 - **Either side may take a book out of a series**: the book's Co-author through
   `PATCH seriesId: null`, the series' Co-author through
-  `DELETE /api/series/:id/books/:bookId` (404 if the book is not in that series).
+  `DELETE /api/series/:id/books/:bookId` (404 if the book is not in that
+  series).
 - **The self-like ban** lives in `likeRepository.create`, the one
   check-then-write there. Safe because a comment's owner never changes, and a
   credit landing between check and insert leaves at worst one early like.

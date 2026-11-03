@@ -36,8 +36,7 @@ export function createBookController(
   // The two Co-author lists are independent: a book credited to A and B may sit
   // in a series credited to A and C, and only A may file it there. Without
   // this an author could put their book into a stranger's series.
-  // chapterController closes the same hole one level
-  // down.
+  // chapterController closes the same hole one level down.
   //
   // null (unlinking) and an absent key (leaving the link alone) touch no
   // series, so neither needs a check. An absent series is still a 404 that

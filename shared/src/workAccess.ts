@@ -42,7 +42,7 @@ export const workAccess = (
   const scope =
     viewer?.permissions[kind === 'book' ? 'books' : 'series'].update;
   const mayEdit = scope === 'any' || (scope === 'own' && isCoAuthor);
-  const isDraft = work.status === 'draft';
+  const isDraft = kind === 'book' && work.status === 'draft';
   // A Co-author keeps no own Work as a Favorite or in a Library: the server
   // refuses.
   const mayHoldAsReader = viewer != null && !isCoAuthor;

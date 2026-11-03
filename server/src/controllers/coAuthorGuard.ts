@@ -31,6 +31,8 @@ export type WorkRef = { book: number } | { series: number };
 export type CoAuthorRef =
   WorkRef | { chapter: number } | { illustration: number };
 
+const isBookRef = (ref: CoAuthorRef): ref is { book: number } => 'book' in ref;
+
 export interface CoAuthorGuard {
   assertMayChange(
     req: Request,
@@ -58,7 +60,7 @@ export function createCoAuthorGuard(deps: {
     let resource: string;
     let id: number;
     let coAuthorIds: number[] | null;
-    if ('book' in ref) {
+    if (isBookRef(ref)) {
       resource = 'Book';
       id = ref.book;
       coAuthorIds = await deps.bookRepository.findCoAuthorIds(id);
@@ -118,7 +120,7 @@ export function createCoAuthorGuard(deps: {
     assertMayRemoveCredit: async (req, ref, userId, refusal) => {
       if (!req.user) throw new UnauthorizedError();
       if (userId === req.user.id) return;
-      const module = 'book' in ref ? 'books' : 'series';
+      const module = isBookRef(ref) ? 'books' : 'series';
       if (scopeFor(req.user.role, module, 'update') !== 'own') {
         throw new ForbiddenError('Only a co-author may remove a co-author');
       }

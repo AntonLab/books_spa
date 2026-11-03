@@ -45,14 +45,8 @@ export interface ChapterRepository {
   // before a chapter was added or deleted, and is a StateConflictError that
   // changes nothing. False when the book is not there.
   reorder(bookId: number, chapterIds: number[]): Promise<boolean>;
-  // Two lookups, not one: a create is checked against the *target book* before
-  // the chapter exists, while an update or delete is checked against the
-  // chapter that is already there.
-  //
-  // Both answer with the book's Co-author ids, or null when the chapter (or the
-  // book) is not there.
+  // The book's Co-author ids, or null when the chapter is not there.
   findCoAuthorIds(id: number): Promise<number[] | null>;
-  findBookCoAuthorIds(bookId: number): Promise<number[] | null>;
 }
 
 function buildWhere(query: ListChaptersQuery): WhereOptions {
@@ -273,7 +267,5 @@ export function createSequelizeChapterRepository(): ChapterRepository {
       const chapter = await Chapter.findByPk(id, { attributes: ['bookId'] });
       return chapter ? findBookCoAuthorIds(chapter.bookId) : null;
     },
-
-    findBookCoAuthorIds,
   };
 }
