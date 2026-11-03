@@ -19,11 +19,14 @@ Notifications, comment tombstones).
   anything else, a Moderator's Cover upload included (no image is processed);
   a scope of `any` then skips only the owner comparison. Every check answers
   404 before 403.
-- Books, series and chapters share one rule, `controllers/coAuthorGuard.ts`:
-  `assertMayChange` (a Co-author, or `any` once the row exists) for edits and orders,
-  `assertCoAuthor` (a Co-author, whatever the scope) for the byline. Each
-  controller hands it a target: the resource, the id and its Co-author lookup.
-  Comments and likes (`assertOwner` / `assertOwned`) compare a single owner.
+- Books, series, chapters and illustrations share one rule,
+  `createCoAuthorGuard` in `controllers/coAuthorGuard.ts`. It is built from the
+  four repositories, and its methods take a resource ref (`{ book }`,
+  `{ series }`, `{ chapter }`, `{ illustration }`), so a caller cannot skip the
+  lookup: the guard does the 404, then the 403.
+  `assertMayChange` (a Co-author, or `any` once the row exists) is for edits and
+  orders, `assertCoAuthor` (a Co-author, whatever the scope) for the byline,
+  `assertMayRemoveCredit` for taking a credit off a work. Comments and likes (`assertOwner` / `assertOwned`) compare a single owner.
 - A book's or series' `own` means one of its Co-authors (`findCoAuthorIds`).
   Chapters have no owner column and resolve through their book; a chapter
   create and reorder check the book, since there is no chapter to own.

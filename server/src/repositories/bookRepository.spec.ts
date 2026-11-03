@@ -479,7 +479,7 @@ describe('bookRepository against real MySQL', { skip }, () => {
     }
   });
 
-  // What every `own` check on a book asks (bookController.assertCoAuthor).
+  // What every `own` check on a book asks (coAuthorGuard).
   test('findCoAuthorIds lists the co-authors in credit order, and null for a missing book', async () => {
     const earlierId = (await User.create({ ...coAuthor, role: 'author' })).id;
     const laterId = (
