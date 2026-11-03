@@ -6,7 +6,7 @@ import {
   validatedParams,
   validatedQuery,
 } from '../middleware/validate.ts';
-import { assertMayChange, type CoAuthorTarget } from './coAuthorGuard.ts';
+import type { CoAuthorGuard } from './coAuthorGuard.ts';
 import { sendCover } from './coverResponse.ts';
 import { creditHandlers } from './creditHandlers.ts';
 import type { BookRepository } from '../repositories/bookRepository.ts';
@@ -25,20 +25,13 @@ import type { ReorderSeriesBooksInput } from '../types/series.ts';
 
 // No try/catch anywhere below: the Express 5 router inspects the returned
 // promise and calls next(err) itself when it rejects.
-export function createBookController(repository: BookRepository) {
-  // Row-level checks go through coAuthorGuard.ts, which holds the rule.
-  const bookTarget = (id: number): CoAuthorTarget => ({
-    resource: 'Book',
-    id,
-    coAuthorIds: () => repository.findCoAuthorIds(id),
-  });
-  // A series' Co-authors — or a Moderator under `any` — are the ones who may
+export function createBookController(
+  repository: BookRepository,
+  guard: CoAuthorGuard
+) {
+  // Row-level checks go through coAuthorGuard.ts, which holds the rule. A
+  // series' Co-authors — or a Moderator under `any` — are the ones who may
   // change which books it holds and in what order.
-  const seriesTarget = (id: number): CoAuthorTarget => ({
-    resource: 'Series',
-    id,
-    coAuthorIds: () => repository.findSeriesCoAuthorIds(id),
-  });
   const MAY_ONLY_CHANGE_OWN = 'You may only change books you co-author';
 
   // Filing a book under a series changes that series too — it starts listing
@@ -57,9 +50,9 @@ export function createBookController(repository: BookRepository) {
     seriesId: number | null | undefined
   ): Promise<void> => {
     if (seriesId === null || seriesId === undefined) return;
-    await assertMayChange(
+    await guard.assertMayChange(
       req,
-      seriesTarget(seriesId),
+      { series: seriesId },
       'You may only add books to series you co-author'
     );
   };
@@ -107,7 +100,7 @@ export function createBookController(repository: BookRepository) {
       const input = validatedBody<UpdateBookInput>(req);
       // The book first: a caller who may not touch it learns nothing about
       // the series they named.
-      await assertMayChange(req, bookTarget(id), MAY_ONLY_CHANGE_OWN);
+      await guard.assertMayChange(req, { book: id }, MAY_ONLY_CHANGE_OWN);
       await assertMayAddToSeries(req, input.seriesId);
 
       const book = await repository.update(id, input);
@@ -117,7 +110,7 @@ export function createBookController(repository: BookRepository) {
 
     remove: async (req, res) => {
       const { id } = validatedParams<{ id: number }>(req);
-      await assertMayChange(req, bookTarget(id), MAY_ONLY_CHANGE_OWN);
+      await guard.assertMayChange(req, { book: id }, MAY_ONLY_CHANGE_OWN);
 
       const deleted = await repository.remove(id, actorOf(req));
       if (!deleted) throw new NotFoundError('Book', id);
@@ -125,8 +118,8 @@ export function createBookController(repository: BookRepository) {
     },
 
     ...creditHandlers({
-      target: bookTarget,
-      module: 'books',
+      guard,
+      kind: 'book',
       refusal: MAY_ONLY_CHANGE_OWN,
       repository,
     }),
@@ -136,9 +129,9 @@ export function createBookController(repository: BookRepository) {
     // them need to see.
     listInSeries: async (req, res) => {
       const { id } = validatedParams<{ id: number }>(req);
-      await assertMayChange(
+      await guard.assertMayChange(
         req,
-        seriesTarget(id),
+        { series: id },
         'You may only see the books of series you co-author'
       );
 
@@ -149,9 +142,9 @@ export function createBookController(repository: BookRepository) {
 
     reorderInSeries: async (req, res) => {
       const { id } = validatedParams<{ id: number }>(req);
-      await assertMayChange(
+      await guard.assertMayChange(
         req,
-        seriesTarget(id),
+        { series: id },
         'You may only reorder the books of series you co-author'
       );
 
@@ -167,7 +160,7 @@ export function createBookController(repository: BookRepository) {
       if (!Buffer.isBuffer(req.body)) {
         throw new UnsupportedMediaTypeError();
       }
-      await assertMayChange(req, bookTarget(id), MAY_ONLY_CHANGE_OWN);
+      await guard.assertMayChange(req, { book: id }, MAY_ONLY_CHANGE_OWN);
 
       const processed = await processCoverImage(req.body);
       const found = await repository.setCover(id, processed);
@@ -183,7 +176,7 @@ export function createBookController(repository: BookRepository) {
     // can vanish between the guard's lookup and the write.
     removeCover: async (req, res) => {
       const { id } = validatedParams<{ id: number }>(req);
-      await assertMayChange(req, bookTarget(id), MAY_ONLY_CHANGE_OWN);
+      await guard.assertMayChange(req, { book: id }, MAY_ONLY_CHANGE_OWN);
 
       const found = await repository.removeCover(id);
       if (!found) throw new NotFoundError('Book', id);

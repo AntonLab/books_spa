@@ -5,7 +5,11 @@ import {
   validatedParams,
   validatedQuery,
 } from '../middleware/validate.ts';
-import { assertMayChange, type CoAuthorTarget } from './coAuthorGuard.ts';
+import {
+  assertMayChange,
+  type CoAuthorGuard,
+  type CoAuthorTarget,
+} from './coAuthorGuard.ts';
 import { sendCover } from './coverResponse.ts';
 import { creditHandlers } from './creditHandlers.ts';
 import type { SeriesRepository } from '../repositories/seriesRepository.ts';
@@ -23,7 +27,10 @@ import type {
 
 // No try/catch anywhere below: the Express 5 router inspects the returned
 // promise and calls next(err) itself when it rejects.
-export function createSeriesController(repository: SeriesRepository) {
+export function createSeriesController(
+  repository: SeriesRepository,
+  guard: CoAuthorGuard
+) {
   // Row-level checks go through coAuthorGuard.ts, which holds the rule.
   const seriesTarget = (id: number): CoAuthorTarget => ({
     resource: 'Series',
@@ -84,8 +91,8 @@ export function createSeriesController(repository: SeriesRepository) {
     },
 
     ...creditHandlers({
-      target: seriesTarget,
-      module: 'series',
+      guard,
+      kind: 'series',
       refusal: MAY_ONLY_CHANGE_OWN,
       repository,
     }),

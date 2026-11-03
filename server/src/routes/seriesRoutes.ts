@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import { ACCEPTED_IMAGE_CONTENT_TYPES, IMAGE_MAX_BYTES } from 'shared';
 import { createBookController } from '../controllers/bookController.ts';
+import { createCoAuthorGuard } from '../controllers/coAuthorGuard.ts';
 import { createSeriesController } from '../controllers/seriesController.ts';
 import { limitEveryRequestByUser } from '../middleware/authRateLimit.ts';
 import { createRequireAuth } from '../middleware/requireAuth.ts';
@@ -21,7 +22,8 @@ import {
 import type { RouteDeps } from './index.ts';
 
 export function createSeriesRoutes(deps: RouteDeps): Router {
-  const controller = createSeriesController(deps.seriesRepository);
+  const guard = createCoAuthorGuard(deps);
+  const controller = createSeriesController(deps.seriesRepository, guard);
   const requirePermission = createRequirePermission(deps);
   const requireAuth = createRequireAuth(deps);
   const router = Router();
@@ -112,7 +114,7 @@ export function createSeriesRoutes(deps: RouteDeps): Router {
   // The books of a series as its editor works with them — the full list,
   // drafts included, and its Series order. Handled by the book controller,
   // because both read and write books; both ride on `series × update`.
-  const bookController = createBookController(deps.bookRepository);
+  const bookController = createBookController(deps.bookRepository, guard);
   router.get(
     '/:id/books',
     requirePermission('series', 'update'),
