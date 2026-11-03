@@ -42,8 +42,6 @@ const useChapterMutation = <TVariables, TResult>(
   const queryClient = useQueryClient();
 
   return useMutation({
-    // Wrapped rather than passed straight through: TanStack calls a mutationFn
-    // with a second context argument an API function never declared.
     mutationFn: (variables: TVariables) => mutationFn(variables),
     onSuccess: () => {
       void applyChange(

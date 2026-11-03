@@ -35,17 +35,13 @@ export const useGenresCounts = () => {
   });
 };
 
-// A rename or a deletion changes the `genre` embedded in every book and series
-// a cached list already holds, so a genre write refreshes those too
-// (`applyChange` owns the key list).
+// Key list: applyChange.
 const useGenreMutation = <TVariables, TResult>(
   mutationFn: (variables: TVariables) => Promise<TResult>
 ) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    // Wrapped rather than passed straight through: TanStack calls a mutationFn
-    // with a second context argument an API function never declared.
     mutationFn: (variables: TVariables) => mutationFn(variables),
     onSuccess: () => applyChange(queryClient, { type: 'genreChanged' }),
   });

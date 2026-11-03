@@ -76,8 +76,6 @@ const useSeriesMutation = <TVariables, TResult>(
   const queryClient = useQueryClient();
 
   return useMutation({
-    // Wrapped rather than passed straight through: TanStack calls a mutationFn
-    // with a second context argument an API function never declared.
     mutationFn: (variables: TVariables) => mutationFn(variables),
     onSuccess: () =>
       applyChange(
@@ -103,8 +101,6 @@ export const useUpdateSeries = (id: number) =>
 export const useDeleteSeries = (id: number) =>
   useSeriesMutation(() => deleteSeries(id), { deletedId: id });
 
-// A Cover change is a series change like any other: a card of the Series may
-// sit in any list.
 export const useUploadSeriesCover = (id: number) =>
   useSeriesMutation((file: File) => uploadSeriesCover(id, file));
 

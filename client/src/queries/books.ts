@@ -129,8 +129,6 @@ const useBookMutation = <TVariables, TResult>(
   const queryClient = useQueryClient();
 
   return useMutation({
-    // Wrapped rather than passed straight through: TanStack calls a mutationFn
-    // with a second context argument an API function never declared.
     mutationFn: (variables: TVariables) => mutationFn(variables),
     onSuccess: () =>
       applyChange(
@@ -154,8 +152,6 @@ export const useUpdateBook = (id: number) =>
 export const useDeleteBook = (id: number) =>
   useBookMutation(() => deleteBook(id), { deletedId: id });
 
-// A Cover change is a book change like any other: a PublicBook in any list may
-// carry it.
 export const useUploadBookCover = (id: number) =>
   useBookMutation((file: File) => uploadBookCover(id, file));
 

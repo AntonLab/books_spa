@@ -39,7 +39,6 @@ const useLibraryActions = <V>({
   removeFn,
   onSettled,
 }: LibraryActionFns<V>) => {
-  // Wrapped: useMutation hands mutationFn a second argument.
   const add = useMutation({
     mutationFn: (variables: V) => addFn(variables),
     onSettled,
