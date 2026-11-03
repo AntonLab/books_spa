@@ -1,9 +1,4 @@
-import {
-  hashKey,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addReadingListItem,
   copyReadingList,
@@ -21,6 +16,7 @@ import {
 } from '../api/readingLists';
 import type { ReadingListPayload } from 'shared';
 import type { ReadingListEditItem } from '../types/readingList';
+import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
 import { useOptimisticReorder } from './reorder';
 
@@ -74,44 +70,34 @@ export const useMyReadingLists = (target: WorkTarget, enabled: boolean) => {
   });
 };
 
-// Every write refreshes the lists' prefix (page, Profile tab) and the
-// caller's own lists (the Add to reading list state).
-// `refreshOnError` is for a delete, as in useSeriesMutation. `settle` is for
-// add and remove: a 409 or 404 means the checkboxes on screen are stale, and
-// only the refetch puts them right.
+// What each write refreshes lives in applyChange. `settle` is for add and
+// remove: a 409 or 404 means the checkboxes on screen are stale, and only the
+// refetch puts them right. A delete (`deletedId`) also refreshes on error.
 const useReadingListMutation = <TVariables, TResult>(
   mutationFn: (variables: TVariables) => Promise<TResult>,
-  {
-    refreshOnError = false,
-    settle = false,
-    deletedId,
-  }: { refreshOnError?: boolean; settle?: boolean; deletedId?: number } = {}
+  { settle = false, deletedId }: { settle?: boolean; deletedId?: number } = {}
 ) => {
   const queryClient = useQueryClient();
-  const refresh = (skipDetail?: boolean) =>
-    Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.allReadingLists,
-        // A delete skips the deleted list's own detail: its page is still
-        // mounted and would refetch into a 404 before the delete's landing
-        // page takes over.
-        ...(skipDetail &&
-          deletedId !== undefined && {
-            predicate: (query) =>
-              hashKey(query.queryKey) !==
-              hashKey(queryKeys.readingList(deletedId)),
-          }),
-      }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.allMyReadingLists }),
-    ]);
 
   return useMutation({
     mutationFn: (variables: TVariables) => mutationFn(variables),
     ...(settle
-      ? { onSettled: () => refresh() }
+      ? {
+          onSettled: () =>
+            applyChange(queryClient, { type: 'readingListChanged' }),
+        }
       : {
-          onSuccess: () => refresh(true),
-          ...(refreshOnError && { onError: () => refresh() }),
+          onSuccess: () =>
+            applyChange(
+              queryClient,
+              deletedId === undefined
+                ? { type: 'readingListChanged' }
+                : { type: 'readingListDeleted', id: deletedId }
+            ),
+          ...(deletedId !== undefined && {
+            onError: () =>
+              applyChange(queryClient, { type: 'readingListDeleteFailed' }),
+          }),
         }),
   });
 };
@@ -127,10 +113,7 @@ export const useUpdateReadingList = (id: number) =>
   );
 
 export const useDeleteReadingList = (id: number) =>
-  useReadingListMutation(() => deleteReadingList(id), {
-    refreshOnError: true,
-    deletedId: id,
-  });
+  useReadingListMutation(() => deleteReadingList(id), { deletedId: id });
 
 export const useRemoveReadingListItem = (id: number) =>
   useReadingListMutation(

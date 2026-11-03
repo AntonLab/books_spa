@@ -15,10 +15,13 @@ import { queryKeys } from './keys';
 import { renderHookWithProviders } from '../test/renderWithProviders';
 import { ApiError } from '../api/client';
 import * as readingListsApi from '../api/readingLists';
+import { applyChange } from './applyChange';
 import type { ReadingListItem } from '../types/readingList';
 
 jest.mock('../api/readingLists');
+jest.mock('./applyChange', () => ({ applyChange: jest.fn() }));
 const mocked = jest.mocked(readingListsApi);
+const mockedApplyChange = jest.mocked(applyChange);
 
 const item = {
   id: 9,
@@ -29,6 +32,7 @@ const item = {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockedApplyChange.mockResolvedValue(undefined);
   mocked.addReadingListItem.mockResolvedValue(item);
   mocked.removeReadingListItem.mockResolvedValue(undefined);
   mocked.createReadingList.mockResolvedValue({} as never);
@@ -40,39 +44,49 @@ beforeEach(() => {
   mocked.listReadingListItems.mockResolvedValue({ items: [] });
 });
 
-it('useToggleListItem adds to the list with itemId null, removes with a number, and refreshes both prefixes', async () => {
+it('useToggleListItem adds to the list with itemId null, removes with a number, and reports a change each time', async () => {
   const { result, queryClient } = renderHookWithProviders(() =>
     useToggleListItem({ bookId: 7 })
   );
-  const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
   await act(() => result.current.mutateAsync({ listId: 4, itemId: null }));
   expect(mocked.addReadingListItem).toHaveBeenCalledWith(4, { bookId: 7 });
+  expect(mockedApplyChange).toHaveBeenCalledTimes(1);
   await act(() => result.current.mutateAsync({ listId: 4, itemId: 9 }));
   expect(mocked.removeReadingListItem).toHaveBeenCalledWith(4, 9);
-  expect(invalidate).toHaveBeenCalledWith({
-    queryKey: queryKeys.allReadingLists,
-  });
-  expect(invalidate).toHaveBeenCalledWith({
-    queryKey: queryKeys.allMyReadingLists,
+  expect(mockedApplyChange).toHaveBeenCalledTimes(2);
+  expect(mockedApplyChange).toHaveBeenLastCalledWith(queryClient, {
+    type: 'readingListChanged',
   });
 });
 
-it('useToggleListItem refreshes even when the add is refused with a 409', async () => {
+it('useToggleListItem reports a change even when the add is refused with a 409', async () => {
   mocked.addReadingListItem.mockRejectedValue(new ApiError(409, 'Conflict'));
   const { result, queryClient } = renderHookWithProviders(() =>
     useToggleListItem({ bookId: 7 })
   );
-  const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
   await act(() =>
     result.current
       .mutateAsync({ listId: 4, itemId: null })
       .catch(() => undefined)
   );
-  expect(invalidate).toHaveBeenCalledWith({
-    queryKey: queryKeys.allReadingLists,
+  expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+    type: 'readingListChanged',
   });
-  expect(invalidate).toHaveBeenCalledWith({
-    queryKey: queryKeys.allMyReadingLists,
+});
+
+it('useRemoveReadingListItem reports a change on success and after a failed call', async () => {
+  const first = renderHookWithProviders(() => useRemoveReadingListItem(4));
+  await act(() => first.result.current.mutateAsync(9));
+  expect(mockedApplyChange).toHaveBeenCalledWith(first.queryClient, {
+    type: 'readingListChanged',
+  });
+
+  mockedApplyChange.mockClear();
+  mocked.removeReadingListItem.mockRejectedValue(new ApiError(404, 'Gone'));
+  const second = renderHookWithProviders(() => useRemoveReadingListItem(4));
+  await act(() => second.result.current.mutateAsync(9).catch(() => undefined));
+  expect(mockedApplyChange).toHaveBeenCalledWith(second.queryClient, {
+    type: 'readingListChanged',
   });
 });
 
@@ -83,41 +97,44 @@ it.each([
     { title: 'T', description: '', tags: [] },
   ],
   ['update', () => useUpdateReadingList(4), { title: 'U' }],
-  ['remove', () => useRemoveReadingListItem(4), 9],
   ['copy', () => useCopyReadingList(), 4],
-])('%s refreshes both prefixes', async (_name, useHook, variables) => {
+])('%s reports a readingListChanged', async (_name, useHook, variables) => {
   const { result, queryClient } = renderHookWithProviders(
     () => useHook() as never
   );
-  const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
   await act(() =>
     (
       result.current as { mutateAsync: (v: unknown) => Promise<unknown> }
     ).mutateAsync(variables)
   );
-  const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
-  expect(keys).toContainEqual(queryKeys.allReadingLists);
-  expect(keys).toContainEqual(queryKeys.allMyReadingLists);
+  expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+    type: 'readingListChanged',
+  });
 });
 
-it('useDeleteReadingList spares its own detail on success and refreshes it after a failure', async () => {
-  const first = renderHookWithProviders(() => useDeleteReadingList(4));
-  const spy = jest.spyOn(first.queryClient, 'invalidateQueries');
-  await act(() => first.result.current.mutateAsync());
-  const lists = spy.mock.calls.find(
-    ([f]) => f?.queryKey === queryKeys.allReadingLists
-  )?.[0];
-  const matches = (key: readonly unknown[]) =>
-    lists?.predicate?.({ queryKey: key } as never);
-  expect(matches(queryKeys.readingList(4))).toBe(false);
-  expect(matches(queryKeys.readingListsPage({ userId: 1 }))).toBe(true);
-  expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.allMyReadingLists });
+it('a failed useUpdateReadingList reports nothing', async () => {
+  mocked.updateReadingList.mockRejectedValue(new ApiError(400, 'Bad'));
+  const { result } = renderHookWithProviders(() => useUpdateReadingList(4));
+  await act(() => result.current.mutateAsync({ title: 'U' }).catch(() => {}));
+  expect(mockedApplyChange).not.toHaveBeenCalled();
+});
 
+it('useDeleteReadingList reports readingListDeleted on success and readingListDeleteFailed after a failure', async () => {
+  const first = renderHookWithProviders(() => useDeleteReadingList(7));
+  await act(() => first.result.current.mutateAsync());
+  expect(mockedApplyChange).toHaveBeenCalledWith(first.queryClient, {
+    type: 'readingListDeleted',
+    id: 7,
+  });
+
+  mockedApplyChange.mockClear();
   mocked.deleteReadingList.mockRejectedValue(new ApiError(404, 'Not Found'));
-  const second = renderHookWithProviders(() => useDeleteReadingList(4));
-  const failed = jest.spyOn(second.queryClient, 'invalidateQueries');
+  const second = renderHookWithProviders(() => useDeleteReadingList(7));
   await act(() => second.result.current.mutateAsync().catch(() => undefined));
-  expect(failed).toHaveBeenCalledWith({ queryKey: queryKeys.allReadingLists });
+  expect(mockedApplyChange).toHaveBeenCalledTimes(1);
+  expect(mockedApplyChange).toHaveBeenCalledWith(second.queryClient, {
+    type: 'readingListDeleteFailed',
+  });
 });
 
 it('useReorderReadingListItems rewrites the cached items at once and sends the ids', async () => {
@@ -164,6 +181,9 @@ it('useReadingListsByBook asks for the Book at the given page and refetches when
     current: 2,
     pageSize: 10,
   });
+  mockedApplyChange.mockImplementation((client) =>
+    client.invalidateQueries({ queryKey: queryKeys.allReadingLists })
+  );
   const { result } = renderHookWithProviders(() => ({
     lists: useReadingListsByBook(7, 2, 10),
     add: useToggleListItem({ bookId: 7 }),
