@@ -1,5 +1,9 @@
 import type { Request } from 'express';
 import { scopeFor } from '../permissions/permissionStore.ts';
+import type { BookRepository } from '../repositories/bookRepository.ts';
+import type { ChapterRepository } from '../repositories/chapterRepository.ts';
+import type { IllustrationRepository } from '../repositories/illustrationRepository.ts';
+import type { SeriesRepository } from '../repositories/seriesRepository.ts';
 import {
   ForbiddenError,
   NotFoundError,
@@ -16,7 +20,8 @@ import {
 //
 // Every check resolves the row first, under every scope, so a missing one is
 // 404 before 403 (a refusal cannot be used to probe which ids exist) and
-// before a handler spends work on the body.
+// before a handler spends work on the body. createCoAuthorGuard owns that
+// order: it resolves the row itself from a ref, so a caller cannot skip it.
 
 // The refusal for editing or deleting a Chapter or its Illustrations.
 export const MAY_CHANGE_CHAPTERS =
@@ -90,4 +95,74 @@ export async function assertMayRemoveCredit(
     throw new ForbiddenError('Only a co-author may remove a co-author');
   }
   await assertCoAuthor(req, target, refusal);
+}
+
+export type WorkRef = { book: number } | { series: number };
+export type CoAuthorRef =
+  WorkRef | { chapter: number } | { illustration: number };
+
+export interface CoAuthorGuard {
+  assertMayChange(
+    req: Request,
+    ref: CoAuthorRef,
+    refusal: string
+  ): Promise<void>;
+  assertCoAuthor(req: Request, ref: WorkRef, refusal: string): Promise<void>;
+  assertMayRemoveCredit(
+    req: Request,
+    ref: WorkRef,
+    userId: number,
+    refusal: string
+  ): Promise<void>;
+}
+
+export function createCoAuthorGuard(deps: {
+  bookRepository: Pick<BookRepository, 'findCoAuthorIds'>;
+  seriesRepository: Pick<SeriesRepository, 'findCoAuthorIds'>;
+  chapterRepository: Pick<ChapterRepository, 'findCoAuthorIds'>;
+  illustrationRepository: Pick<IllustrationRepository, 'findCoAuthorIds'>;
+}): CoAuthorGuard {
+  const targetOf = (ref: CoAuthorRef): CoAuthorTarget => {
+    if ('book' in ref) {
+      return {
+        resource: 'Book',
+        id: ref.book,
+        coAuthorIds: () => deps.bookRepository.findCoAuthorIds(ref.book),
+      };
+    }
+    if ('series' in ref) {
+      return {
+        resource: 'Series',
+        id: ref.series,
+        coAuthorIds: () => deps.seriesRepository.findCoAuthorIds(ref.series),
+      };
+    }
+    if ('chapter' in ref) {
+      return {
+        resource: 'Chapter',
+        id: ref.chapter,
+        coAuthorIds: () => deps.chapterRepository.findCoAuthorIds(ref.chapter),
+      };
+    }
+    return {
+      resource: 'Illustration',
+      id: ref.illustration,
+      coAuthorIds: () =>
+        deps.illustrationRepository.findCoAuthorIds(ref.illustration),
+    };
+  };
+  return {
+    assertMayChange: (req, ref, refusal) =>
+      assertMayChange(req, targetOf(ref), refusal),
+    assertCoAuthor: (req, ref, refusal) =>
+      assertCoAuthor(req, targetOf(ref), refusal),
+    assertMayRemoveCredit: (req, ref, userId, refusal) =>
+      assertMayRemoveCredit(
+        req,
+        targetOf(ref),
+        'book' in ref ? 'books' : 'series',
+        userId,
+        refusal
+      ),
+  };
 }
