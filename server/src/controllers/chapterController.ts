@@ -6,11 +6,7 @@ import {
 } from '../middleware/validate.ts';
 import type { ChapterRepository } from '../repositories/chapterRepository.ts';
 import { viewerOf } from '../repositories/visibility.ts';
-import {
-  assertMayChange,
-  type CoAuthorTarget,
-  MAY_CHANGE_CHAPTERS,
-} from './coAuthorGuard.ts';
+import { type CoAuthorGuard, MAY_CHANGE_CHAPTERS } from './coAuthorGuard.ts';
 import { NotFoundError } from '../types/errors.ts';
 import type {
   CreateChapterInput,
@@ -21,28 +17,19 @@ import type {
 
 // No try/catch anywhere below: the Express 5 router inspects the returned
 // promise and calls next(err) itself when it rejects.
-export function createChapterController(repository: ChapterRepository) {
-  // Row-level checks go through coAuthorGuard.ts, which holds the rule.
+export function createChapterController(
+  repository: ChapterRepository,
+  guard: CoAuthorGuard
+) {
   // Chapters have no owner column: their book's Co-authors answer for them.
-  const chapterTarget = (id: number): CoAuthorTarget => ({
-    resource: 'Chapter',
-    id,
-    coAuthorIds: () => repository.findCoAuthorIds(id),
-  });
   // A create has no chapter to own yet, and a reorder touches the book's
-  // chapters as a whole, so the book answers for both.
-  const bookTarget = (id: number): CoAuthorTarget => ({
-    resource: 'Book',
-    id,
-    coAuthorIds: () => repository.findBookCoAuthorIds(id),
-  });
-
+  // chapters as a whole, so those two name the book.
   return {
     create: async (req, res) => {
       const input = validatedBody<CreateChapterInput>(req);
-      await assertMayChange(
+      await guard.assertMayChange(
         req,
-        bookTarget(input.bookId),
+        { book: input.bookId },
         'You may only add chapters to books you co-author'
       );
 
@@ -67,7 +54,7 @@ export function createChapterController(repository: ChapterRepository) {
 
     update: async (req, res) => {
       const { id } = validatedParams<{ id: number }>(req);
-      await assertMayChange(req, chapterTarget(id), MAY_CHANGE_CHAPTERS);
+      await guard.assertMayChange(req, { chapter: id }, MAY_CHANGE_CHAPTERS);
 
       const chapter = await repository.update(
         id,
@@ -79,7 +66,7 @@ export function createChapterController(repository: ChapterRepository) {
 
     remove: async (req, res) => {
       const { id } = validatedParams<{ id: number }>(req);
-      await assertMayChange(req, chapterTarget(id), MAY_CHANGE_CHAPTERS);
+      await guard.assertMayChange(req, { chapter: id }, MAY_CHANGE_CHAPTERS);
 
       const deleted = await repository.remove(id);
       if (!deleted) throw new NotFoundError('Chapter', id);
@@ -88,9 +75,9 @@ export function createChapterController(repository: ChapterRepository) {
 
     reorder: async (req, res) => {
       const { id: bookId } = validatedParams<{ id: number }>(req);
-      await assertMayChange(
+      await guard.assertMayChange(
         req,
-        bookTarget(bookId),
+        { book: bookId },
         'You may only reorder chapters in books you co-author'
       );
 

@@ -26,10 +26,8 @@ import { ACCEPTED_IMAGE_CONTENT_TYPES, IMAGE_MAX_BYTES } from 'shared';
 import type { RouteDeps } from './index.ts';
 
 export function createBookRoutes(deps: RouteDeps): Router {
-  const controller = createBookController(
-    deps.bookRepository,
-    createCoAuthorGuard(deps)
-  );
+  const guard = createCoAuthorGuard(deps);
+  const controller = createBookController(deps.bookRepository, guard);
   const requirePermission = createRequirePermission(deps);
   const requireAuth = createRequireAuth(deps);
   const router = Router();
@@ -127,7 +125,7 @@ export function createBookRoutes(deps: RouteDeps): Router {
     '/:id/chapter-order',
     requirePermission('chapters', 'update'),
     validate({ params: idParamSchema, body: reorderChaptersSchema }),
-    createChapterController(deps.chapterRepository).reorder
+    createChapterController(deps.chapterRepository, guard).reorder
   );
 
   // Reading progress is the caller's own Library state, so requireAuth rather

@@ -1,5 +1,6 @@
 import express, { Router, type Request } from 'express';
 import { ACCEPTED_IMAGE_CONTENT_TYPES, IMAGE_MAX_BYTES } from 'shared';
+import { createCoAuthorGuard } from '../controllers/coAuthorGuard.ts';
 import { createChapterController } from '../controllers/chapterController.ts';
 import { createIllustrationController } from '../controllers/illustrationController.ts';
 import { limitUserWrites } from '../middleware/authRateLimit.ts';
@@ -26,7 +27,8 @@ export const isChapterTextWrite = (req: Request): boolean =>
   (req.method === 'PATCH' && /^\/api\/chapters\/[^/]+\/?$/i.test(req.path));
 
 export function createChapterRoutes(deps: RouteDeps): Router {
-  const controller = createChapterController(deps.chapterRepository);
+  const guard = createCoAuthorGuard(deps);
+  const controller = createChapterController(deps.chapterRepository, guard);
   const illustrations = createIllustrationController(
     deps.illustrationRepository
   );
