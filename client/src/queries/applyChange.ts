@@ -41,13 +41,11 @@ export const applyChange = async (
   change: Change
 ): Promise<void> => {
   switch (change.type) {
-    // Every book write invalidates the whole `books` prefix: a change to one
-    // book can move it into or out of any list (a status change hides it from
-    // the main page), and the detail key sits under the same prefix. The
-    // `series` prefix goes too, because filing a book into a series, or taking
-    // it out, changes that series' book list. The `genres` prefix goes as well:
-    // a status change can move a Genre into or out of the list of Genres with a
-    // published book.
+    // A book write can move a book into or out of any list (a status change
+    // hides it from the main page), so the whole books prefix goes, detail
+    // included. series goes because filing a book changes that series' list.
+    // genres goes because a status change can move a Genre in or out of the
+    // list with a published book.
     case 'bookChanged':
     case 'bookDeleteFailed':
       await Promise.all([
