@@ -13,7 +13,14 @@ export type Change =
   | { type: 'readingListChanged' | 'readingListDeleteFailed' }
   | { type: 'readingListDeleted'; id: number }
   | { type: 'chapterChanged'; bookId: number }
-  | { type: 'chapterDeleted'; bookId: number; id: number };
+  | { type: 'chapterDeleted'; bookId: number; id: number }
+  | { type: 'bookLibraryChanged' }
+  | { type: 'seriesLibraryChanged'; id: number }
+  | { type: 'readingProgressRecorded' }
+  | { type: 'favoriteToggled'; detailKey: QueryKey }
+  | { type: 'favoriteRemoved' }
+  | { type: 'accountChanged' }
+  | { type: 'genreChanged' };
 
 // A delete skips the deleted record's own detail: its page is still mounted,
 // would refetch into a 404 and redirect with "no longer exists" before the
@@ -124,6 +131,77 @@ export const applyChange = async (
         queryClient.invalidateQueries({
           queryKey: queryKeys.book(change.bookId),
         }),
+      ]);
+      return;
+    // The Library buttons of a Book page. The detail refetch carries the
+    // status, so the `books` prefix and the Library both go stale.
+    case 'bookLibraryChanged':
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allLibrary }),
+      ]);
+      return;
+    // The Series detail carries viewerLibrary, so it is refetched with the
+    // Books and the Library.
+    case 'seriesLibraryChanged':
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.seriesDetail(change.id),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allLibrary }),
+      ]);
+      return;
+    // A reading event can lift not_interested to Reading and finished advances
+    // it, so refetch the Books, the Series (viewerLibrary derives from Book
+    // statuses) and the Library.
+    case 'readingProgressRecorded':
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allSeries }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allLibrary }),
+      ]);
+      return;
+    // A toggle refreshes the work's own detail (the star and the count) and
+    // the Favorites lists. `detailKey` is passed as given.
+    case 'favoriteToggled':
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: change.detailKey }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allFavorites }),
+      ]);
+      return;
+    // Every book and series detail carries the Favorite count and the viewer's
+    // Favorite id, so both prefixes go stale with the lists.
+    case 'favoriteRemoved':
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.allFavorites }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allSeries }),
+      ]);
+      return;
+    // An Account change touches every place an AuthorSummary or a PublicUser is
+    // embedded: the session itself, every books, series and comments list or
+    // detail that names its owner, and the author-picker's search cache. The
+    // endpoints answer a bare PublicUser, so the session is invalidated, never
+    // written: /auth/me answers the whole SessionUser again.
+    case 'accountChanged':
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.session }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allSeries }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allComments }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allAuthors }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allAccounts }),
+      ]);
+      return;
+    // `genres` is obvious; `books` and `series` go because a rename or a
+    // deletion changes the `genre` embedded in every book and series a cached
+    // list already holds.
+    case 'genreChanged':
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.genres }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.allSeries }),
       ]);
       return;
     default:

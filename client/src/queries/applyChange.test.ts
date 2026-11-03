@@ -21,6 +21,11 @@ const KEYS = [
   ['books', 2],
   ['library', {}],
   ['favorites', {}],
+  ['auth', 'me'],
+  ['comments', { bookId: 1 }],
+  ['authors', { q: 'a' }],
+  ['accounts', 3],
+  ['notifications', 1],
 ] as const;
 
 const staleAfter = async (change: Change) => {
@@ -142,6 +147,89 @@ describe('applyChange', () => {
     );
   });
 
+  it('bookLibraryChanged refreshes books and library only', async () => {
+    const stale = await staleAfter({ type: 'bookLibraryChanged' });
+    expect(stale).toEqual(
+      expect.arrayContaining(s(['books', 7], ['library', {}]))
+    );
+    expect(stale).not.toContain(s(['series', {}])[0]);
+    expect(stale).not.toContain(s(['favorites', {}])[0]);
+  });
+
+  it('seriesLibraryChanged refreshes that series detail, books and library', async () => {
+    const stale = await staleAfter({ type: 'seriesLibraryChanged', id: 7 });
+    expect(stale).toEqual(
+      expect.arrayContaining(s(['series', 7], ['books', {}], ['library', {}]))
+    );
+    expect(stale).not.toContain(s(['series', 8])[0]);
+    expect(stale).not.toContain(s(['genres'])[0]);
+  });
+
+  it('readingProgressRecorded refreshes books, series and library', async () => {
+    const stale = await staleAfter({ type: 'readingProgressRecorded' });
+    expect(stale).toEqual(
+      expect.arrayContaining(s(['books', 7], ['series', 8], ['library', {}]))
+    );
+    expect(stale).not.toContain(s(['favorites', {}])[0]);
+  });
+
+  it('favoriteToggled refreshes the given detail and favorites', async () => {
+    const stale = await staleAfter({
+      type: 'favoriteToggled',
+      detailKey: ['books', 7],
+    });
+    expect(stale).toEqual(
+      expect.arrayContaining(s(['books', 7], ['favorites', {}]))
+    );
+    expect(stale).not.toContain(s(['books', 8])[0]);
+    expect(stale).not.toContain(s(['series', 7])[0]);
+  });
+
+  it('favoriteToggled with a series detail key refreshes that series', async () => {
+    const stale = await staleAfter({
+      type: 'favoriteToggled',
+      detailKey: ['series', 7],
+    });
+    expect(stale).toContain(s(['series', 7])[0]);
+    expect(stale).not.toContain(s(['series', 8])[0]);
+  });
+
+  it('favoriteRemoved refreshes favorites, books and series', async () => {
+    const stale = await staleAfter({ type: 'favoriteRemoved' });
+    expect(stale).toEqual(
+      expect.arrayContaining(s(['favorites', {}], ['books', 8], ['series', 8]))
+    );
+    expect(stale).not.toContain(s(['library', {}])[0]);
+  });
+
+  it('accountChanged refreshes every place an Account is embedded', async () => {
+    const stale = await staleAfter({ type: 'accountChanged' });
+    expect(stale).toEqual(
+      expect.arrayContaining(
+        s(
+          ['auth', 'me'],
+          ['books', 7],
+          ['series', 7],
+          ['comments', { bookId: 1 }],
+          ['authors', { q: 'a' }],
+          ['accounts', 3]
+        )
+      )
+    );
+    expect(stale).not.toContain(s(['notifications', 1])[0]);
+    expect(stale).not.toContain(s(['genres'])[0]);
+    expect(stale).not.toContain(s(['library', {}])[0]);
+  });
+
+  it('genreChanged refreshes genres, books and series', async () => {
+    const stale = await staleAfter({ type: 'genreChanged' });
+    expect(stale).toEqual(
+      expect.arrayContaining(s(['genres'], ['books', 7], ['series', 7]))
+    );
+    expect(stale).not.toContain(s(['comments', { bookId: 1 }])[0]);
+    expect(stale).not.toContain(s(['auth', 'me'])[0]);
+  });
+
   it.each([0, 7, 2_147_483_647])(
     'never touches favorites or library (id %i)',
     async (id) => {
@@ -162,6 +250,24 @@ describe('applyChange', () => {
         const stale = await staleAfter(change);
         expect(stale).not.toContain(s(['favorites', {}])[0]);
         expect(stale).not.toContain(s(['library', {}])[0]);
+      }
+    }
+  );
+
+  it.each([0, 7, 2_147_483_647])(
+    'every new intent invalidates something (id %i)',
+    async (id) => {
+      const changes: Change[] = [
+        { type: 'bookLibraryChanged' },
+        { type: 'seriesLibraryChanged', id },
+        { type: 'readingProgressRecorded' },
+        { type: 'favoriteToggled', detailKey: ['books', id] },
+        { type: 'favoriteRemoved' },
+        { type: 'accountChanged' },
+        { type: 'genreChanged' },
+      ];
+      for (const change of changes) {
+        expect((await staleAfter(change)).length).toBeGreaterThan(0);
       }
     }
   );
