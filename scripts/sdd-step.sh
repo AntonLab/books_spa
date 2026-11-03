@@ -7,10 +7,11 @@
 #
 #   bash scripts/sdd-step.sh review PLAN BASE [HEAD]  review package for BASE..HEAD
 #   bash scripts/sdd-step.sh next PLAN N [LEDGER_LINE]  append the ledger line, write task N's brief
+#   bash scripts/sdd-step.sh mark FOLLOWUPS LINE SHA [NOTE]  append " [fixed: SHA, NOTE]" to line LINE
 set -euo pipefail
 
 usage() {
-  echo "usage: sdd-step.sh review PLAN BASE [HEAD] | next PLAN N [LEDGER_LINE]" >&2
+  echo "usage: sdd-step.sh review PLAN BASE [HEAD] | next PLAN N [LEDGER_LINE] | mark FOLLOWUPS LINE SHA [NOTE]" >&2
   exit 2
 }
 [ $# -ge 3 ] || usage
@@ -43,6 +44,20 @@ case "$step" in
       echo "no task $3 in $plan: plan complete" >&2
     fi
     exit "$status"
+    ;;
+  mark)
+    [ $# -ge 4 ] || usage
+    file=$2 line=$3 suffix=" [fixed: $4${5:+, $5}]"
+    [ -f "$file" ] || { echo "no such file: $file" >&2; exit 2; }
+    case "$line" in '' | *[!0-9]* | 0) echo "LINE must be a positive integer: $line" >&2; exit 2 ;; esac
+    text=$(awk -v n="$line" 'NR == n { print "x" $0; exit }' "$file")
+    [ -n "$text" ] || { echo "no line $line in $file" >&2; exit 2; }
+    case "$text" in
+      *'[fixed:'* | *'[dropped'*) echo "line $line is already marked" >&2; exit 2 ;;
+    esac
+    tmp=$(mktemp)
+    awk -v n="$line" -v s="$suffix" 'NR == n { $0 = $0 s } { print }' "$file" > "$tmp"
+    mv "$tmp" "$file"
     ;;
   *) usage ;;
 esac

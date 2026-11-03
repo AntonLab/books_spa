@@ -23,6 +23,7 @@ writeRateLimit
 <name>Repository.spec.ts
 docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md
 docs/superpowers/specs/YYYY-MM-DD-<topic>-followups.md
+docs/superpowers/queue/YYYY-MM-DD-<name>.json
 repositories/<name>Repository.fake.testkit.ts
 …-codemap.md
 
