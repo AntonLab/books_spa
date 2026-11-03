@@ -479,7 +479,7 @@ describe('bookRepository against real MySQL', { skip }, () => {
     }
   });
 
-  // What every `own` check on a book asks (bookController.assertCoAuthor).
+  // What every `own` check on a book asks (coAuthorGuard).
   test('findCoAuthorIds lists the co-authors in credit order, and null for a missing book', async () => {
     const earlierId = (await User.create({ ...coAuthor, role: 'author' })).id;
     const laterId = (
@@ -508,24 +508,6 @@ describe('bookRepository against real MySQL', { skip }, () => {
       earlierId,
     ]);
     assert.equal(await repository.findCoAuthorIds(created.id + 10_000), null);
-  });
-
-  // What filing a book into a series asks (bookController.assertMayAddToSeries).
-  test('findSeriesCoAuthorIds lists the series co-authors in credit order, and null for a missing series', async () => {
-    const coAuthorId = (await User.create({ ...coAuthor, role: 'author' })).id;
-    const shared = await createCreditedSeries(
-      { title: 'Shared Series', description: 'x', tags: [] },
-      [coAuthorId, ownerId]
-    );
-
-    assert.deepEqual(await repository.findSeriesCoAuthorIds(shared.id), [
-      coAuthorId,
-      ownerId,
-    ]);
-    assert.equal(
-      await repository.findSeriesCoAuthorIds(shared.id + 10_000),
-      null
-    );
   });
 
   // Only the unique index's rejection means "already credited". An account

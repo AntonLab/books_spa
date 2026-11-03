@@ -2,8 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryKey } from '@tanstack/react-query';
 import { createFavorite, deleteFavorite } from '../api/favorites';
 import type { CreateFavoritePayload } from 'shared';
-import { invalidateWorks } from './invalidateWorks';
-import { queryKeys } from './keys';
+import { applyChange } from './applyChange';
 
 // One hook for both directions, as useToggleLike: `existingId` is the
 // viewerFavoriteId the caller holds (null adds, a number removes that row),
@@ -26,25 +25,19 @@ export const useToggleFavorite = (invalidates: QueryKey) => {
     // (already removed) means the star and the count on screen are stale,
     // and only the refetch puts them right.
     onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: invalidates }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allFavorites }),
-      ]),
+      applyChange(queryClient, {
+        type: 'favoriteToggled',
+        detailKey: invalidates,
+      }),
   });
 };
 
-// The Favorites page's remove. Every book and series detail carries the
-// count and the viewer's Favorite id, so both prefixes go stale with the
-// lists. onSettled for the reason useToggleFavorite gives.
+// The Favorites page's remove. onSettled for the reason useToggleFavorite gives.
 export const useRemoveFavorite = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (id: number) => deleteFavorite(id),
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.allFavorites }),
-        invalidateWorks(queryClient),
-      ]),
+    onSettled: () => applyChange(queryClient, { type: 'favoriteRemoved' }),
   });
 };

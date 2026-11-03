@@ -83,7 +83,6 @@ export function chapterRepositoryContract(
     assert.equal(await repository.remove(MISSING_ID), false);
     assert.equal(await repository.reorder(MISSING_ID, [1]), false);
     assert.equal(await repository.findCoAuthorIds(MISSING_ID), null);
-    assert.equal(await repository.findBookCoAuthorIds(MISSING_ID), null);
   });
 
   // Compared as sets: the controllers only ask whether the caller is among
@@ -101,10 +100,6 @@ export function chapterRepositoryContract(
 
     assert.deepEqual(
       sorted(await repository.findCoAuthorIds(created.id)),
-      expected
-    );
-    assert.deepEqual(
-      sorted(await repository.findBookCoAuthorIds(bookId)),
       expected
     );
   });

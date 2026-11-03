@@ -8,6 +8,7 @@ paths:
   - 'server/src/middleware/sessionUser*'
   - 'server/src/middleware/validate*'
   - 'server/src/controllers/authController.ts'
+  - 'server/src/accountSession.ts'
   - 'server/src/routes/authRoutes.ts'
   - 'server/src/repositories/sessionRepository.ts'
   - 'server/src/repositories/passwordResetRepository.ts'
@@ -37,6 +38,7 @@ paths:
 
 ## Login
 
+- Sign-in and reset rules live in `accountSession.ts`. The controller keeps parsing, cookies and the response.
 - **Sign-in takes a login or an email** in the one `login` field. An `@` in the
   value picks the column: with one it is an email (case-insensitive,
   accent-sensitive), without one a login (case-sensitive). A login may not
@@ -46,8 +48,8 @@ paths:
 - **One answer to two questions**: an unknown login or email and a wrong
   password give the same 401, and the unknown-login path spends an argon2
   verify on a cached dummy hash so timing cannot tell them apart.
-  `authController.spec.ts` drives the `verify` seam: a wall-clock assertion
-  would flake, and an ESM binding cannot be spied on.
+  `accountSession.spec.ts` drives the `verify` seam (rationale at
+  `AccountSessionDeps.verify` in `accountSession.ts`).
 - A blocked account is checked **after** the password, or the 403 would confirm
   the account to someone without it.
 - **A login in flight cannot outlive a block or a password change.** argon2 is
@@ -89,7 +91,7 @@ paths:
 - The link leaves through `MailDelivery` (`delivery/mailDelivery.ts`):
   `passwordResetMail` composes it, `MAIL_DELIVERY` picks `log` or `smtp`.
 - Never await or branch on the lookup, token writes or send. A failure anywhere
-  in the chain is logged (`authController.ts`: `Password reset request failed`,
+  in the chain is logged (`accountSession.ts`: `Password reset request failed`,
   or `Password reset mail failed` for the send; no address or token in the
   line) and not retried. The account can ask again; the new request supersedes
   the stored token.

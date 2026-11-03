@@ -32,7 +32,7 @@ Each answers a question the others cannot:
   relies on. The one domain rule in a contract is a Genre name's
   case-insensitive uniqueness, because the fake has to reproduce what MySQL
   gets from the collation. A repository method a controller comes to rely on
-  belongs in its contract. `chapterRepository.findBookCoAuthorIds` has no
+  belongs in its contract. `chapterRepository.findCoAuthorIds` has no
   `ORDER BY`, so its contract compares a set.
 - **`src/app.spec.ts`** is the one suite from HTTP through real repositories to
   MySQL, on its own `_app` schema. It takes its repositories from

@@ -16,8 +16,6 @@ export interface IllustrationRepository {
   getImageData(id: number, viewer: Viewer): Promise<{ data: Buffer } | null>;
   // The Co-author ids of the illustration's book; null when it is missing.
   findCoAuthorIds(id: number): Promise<number[] | null>;
-  // The Co-author ids of the chapter's book; null when the chapter is missing.
-  findChapterCoAuthorIds(chapterId: number): Promise<number[] | null>;
   // A cheap look at the cap, so an upload past it is refused before its image
   // is decoded. Unlocked; create() rechecks under the chapter lock.
   isFull(chapterId: number): Promise<boolean>;
@@ -107,13 +105,6 @@ export function createSequelizeIllustrationRepository(): IllustrationRepository 
       if (!chapter) return null;
 
       return coAuthorIdsOfBook(chapter.bookId);
-    },
-
-    async findChapterCoAuthorIds(chapterId) {
-      const chapter = await Chapter.findByPk(chapterId, {
-        attributes: ['id', 'bookId'],
-      });
-      return chapter ? coAuthorIdsOfBook(chapter.bookId) : null;
     },
 
     async isFull(chapterId) {

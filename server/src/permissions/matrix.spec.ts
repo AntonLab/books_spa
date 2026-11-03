@@ -109,6 +109,23 @@ test('an admin moderates but does not author', () => {
   assert.equal(scope('admin', 'chapters', 'create'), 'none');
 });
 
+// Pins the copy in client/src/test/session.ts permissionsOf: moderators `any`,
+// author `own`, everyone else `none`.
+test('books and series update scope per role matches the client test fixture', () => {
+  const expected = {
+    guest: 'none',
+    user: 'none',
+    author: 'own',
+    admin: 'any',
+    superadmin: 'any',
+  };
+  for (const [role, want] of Object.entries(expected)) {
+    for (const module of ['books', 'series']) {
+      assert.equal(scope(role, module, 'update'), want, `${role} ${module}`);
+    }
+  }
+});
+
 test('a user may flip their own like, which the API exposes as PATCH /likes/:id', () => {
   // likeRoutes has always had a PATCH — it is how a like becomes a dislike.
   // Without this grant the route is reachable by superadmin alone, which is a

@@ -1,9 +1,4 @@
-import {
-  hashKey,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createSeries,
   deleteSeries,
@@ -21,6 +16,7 @@ import {
 import { updateBook } from '../api/books';
 import type { SeriesPayload } from 'shared';
 import type { SeriesBookSummary } from '../types/api';
+import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
 import { useOptimisticReorder } from './reorder';
 
@@ -72,44 +68,25 @@ export const useSeriesBooks = (id: number, enabled: boolean) => {
   });
 };
 
-// Every series write invalidates the `series` prefix and the `books` one: a
-// deleted series unlinks its books, and a book taken out of one changes what
-// that book's page shows.
-// `refreshOnError` is for a delete: one that fails because the series is
-// already gone (404) or no longer editable (403) leaves the lists stale,
-// whereas a failed update must not refetch the form's own data under the
-// user's edits.
+// Only a delete (deletedId) also applies seriesDeleteFailed on error; see applyChange.
 const useSeriesMutation = <TVariables, TResult>(
   mutationFn: (variables: TVariables) => Promise<TResult>,
-  {
-    refreshOnError = false,
-    deletedId,
-  }: { refreshOnError?: boolean; deletedId?: number } = {}
+  { deletedId }: { deletedId?: number } = {}
 ) => {
   const queryClient = useQueryClient();
-  const refresh = (skipDetail?: boolean) =>
-    Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.allSeries,
-        // A delete skips the deleted series' own detail: its page is still
-        // mounted, would refetch into a 404 and redirect with "no longer
-        // exists" before the delete's own landing page takes over.
-        ...(skipDetail &&
-          deletedId !== undefined && {
-            predicate: (query) =>
-              hashKey(query.queryKey) !==
-              hashKey(queryKeys.seriesDetail(deletedId)),
-          }),
-      }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
-    ]);
 
   return useMutation({
-    // Wrapped rather than passed straight through: TanStack calls a mutationFn
-    // with a second context argument an API function never declared.
     mutationFn: (variables: TVariables) => mutationFn(variables),
-    onSuccess: () => refresh(true),
-    ...(refreshOnError && { onError: () => refresh() }),
+    onSuccess: () =>
+      applyChange(
+        queryClient,
+        deletedId === undefined
+          ? { type: 'seriesChanged' }
+          : { type: 'seriesDeleted', id: deletedId }
+      ),
+    ...(deletedId !== undefined && {
+      onError: () => applyChange(queryClient, { type: 'seriesDeleteFailed' }),
+    }),
   });
 };
 
@@ -122,12 +99,8 @@ export const useUpdateSeries = (id: number) =>
   );
 
 export const useDeleteSeries = (id: number) =>
-  useSeriesMutation(() => deleteSeries(id), {
-    refreshOnError: true,
-    deletedId: id,
-  });
+  useSeriesMutation(() => deleteSeries(id), { deletedId: id });
 
-// A Cover change invalidates every prefix a card of the Series may sit in.
 export const useUploadSeriesCover = (id: number) =>
   useSeriesMutation((file: File) => uploadSeriesCover(id, file));
 

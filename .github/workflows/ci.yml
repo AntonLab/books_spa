@@ -35,6 +35,7 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run test:scripts
+      - run: npm test -w shared
       # node --check takes one file, and no ESLint config reaches scripts/, so a
       # syntax error in a SessionStart hook script would otherwise pass CI.
       - run: for f in scripts/*.mjs; do node --check "$f"; done

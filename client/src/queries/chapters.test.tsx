@@ -2,18 +2,20 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import {
-  useChapter,
   useCreateChapter,
   useDeleteChapter,
   useUpdateChapter,
 } from './chapters';
 import { createTestQueryClient } from '../test/queryClient';
 import * as chaptersApi from '../api/chapters';
+import { applyChange } from './applyChange';
 import type { PublicChapter } from '../types/chapter';
 
 jest.mock('../api/chapters');
+jest.mock('./applyChange', () => ({ applyChange: jest.fn() }));
 
 const mockedChapters = jest.mocked(chaptersApi);
+const mockedApplyChange = jest.mocked(applyChange);
 
 const chapter: PublicChapter = {
   id: 9,
@@ -27,38 +29,28 @@ const chapter: PublicChapter = {
 
 const setUp = () => {
   const client = createTestQueryClient();
-  const invalidate = jest.spyOn(client, 'invalidateQueries');
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
   Wrapper.displayName = 'QueryClientWrapper';
 
   return {
+    client,
     wrapper: Wrapper,
-    invalidate,
-    // The book detail carries wordCount, summed over Published chapters, so a
-    // create, a save or a delete can each move it. The all-chapters prefix
-    // covers the list, so a separate list key must not be sent.
-    expectChaptersAndBookInvalidated: () => {
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['chapters'] });
-      expect(invalidate).not.toHaveBeenCalledWith({
-        queryKey: ['chapters', { bookId: 1 }],
-      });
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 1] });
-    },
   };
 };
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockedApplyChange.mockResolvedValue(undefined);
   mockedChapters.createChapter.mockResolvedValue(chapter);
   mockedChapters.updateChapter.mockResolvedValue(chapter);
   mockedChapters.deleteChapter.mockResolvedValue(undefined);
 });
 
 describe('chapter writes', () => {
-  it('publishing a new chapter refreshes the list and the book’s figures', async () => {
-    const { wrapper, expectChaptersAndBookInvalidated } = setUp();
+  it('publishing a new chapter reports a chapterChanged', async () => {
+    const { client, wrapper } = setUp();
     const { result } = renderHook(() => useCreateChapter(1), { wrapper });
 
     result.current.mutate({
@@ -69,11 +61,24 @@ describe('chapter writes', () => {
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expectChaptersAndBookInvalidated();
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'chapterChanged',
+      bookId: 1,
+    });
   });
 
-  it('saving a chapter refreshes the list and the book’s figures', async () => {
-    const { wrapper, expectChaptersAndBookInvalidated } = setUp();
+  it('does not wait for applyChange: a never-resolving refresh still ends the mutation', async () => {
+    mockedApplyChange.mockReturnValue(new Promise(() => {}));
+    const { wrapper } = setUp();
+    const { result } = renderHook(() => useUpdateChapter(1, 9), { wrapper });
+
+    result.current.mutate({ text: 'x', expectedUpdatedAt: 'y' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
+
+  it('saving a chapter reports a chapterChanged', async () => {
+    const { client, wrapper } = setUp();
     const { result } = renderHook(() => useUpdateChapter(1, 9), { wrapper });
 
     result.current.mutate({
@@ -86,35 +91,62 @@ describe('chapter writes', () => {
       text: 'It was a dark and stormy night.',
       expectedUpdatedAt: '2026-09-03T00:00:00.000Z',
     });
-    expectChaptersAndBookInvalidated();
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'chapterChanged',
+      bookId: 1,
+    });
   });
 
-  it('deleting a chapter refetches the other chapters and the book, but not the deleted detail', async () => {
-    const { wrapper, invalidate } = setUp();
-    mockedChapters.getChapter.mockImplementation((id) =>
-      Promise.resolve({ ...chapter, id })
-    );
-    const { result } = renderHook(
-      () => ({
-        deleted: useChapter(9),
-        other: useChapter(10),
-        remove: useDeleteChapter(1, 9),
-      }),
-      { wrapper }
-    );
-    await waitFor(() => expect(result.current.other.isSuccess).toBe(true));
-    await waitFor(() => expect(result.current.deleted.isSuccess).toBe(true));
-    expect(mockedChapters.getChapter).toHaveBeenCalledTimes(2);
+  it('a failed save reports nothing', async () => {
+    mockedChapters.updateChapter.mockRejectedValue(new Error('boom'));
+    const { wrapper } = setUp();
+    const { result } = renderHook(() => useUpdateChapter(1, 9), { wrapper });
 
-    result.current.remove.mutate(undefined);
+    result.current.mutate({ text: 'x', expectedUpdatedAt: 'y' });
 
-    await waitFor(() => expect(result.current.remove.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mockedApplyChange).not.toHaveBeenCalled();
+  });
+
+  it('a failed create reports nothing', async () => {
+    mockedChapters.createChapter.mockRejectedValue(new Error('boom'));
+    const { wrapper } = setUp();
+    const { result } = renderHook(() => useCreateChapter(1), { wrapper });
+
+    result.current.mutate({
+      bookId: 1,
+      title: 'Chapter One',
+      text: 'x',
+      publishedAt: 'now',
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mockedApplyChange).not.toHaveBeenCalled();
+  });
+
+  it('a failed delete reports nothing', async () => {
+    mockedChapters.deleteChapter.mockRejectedValue(new Error('boom'));
+    const { wrapper } = setUp();
+    const { result } = renderHook(() => useDeleteChapter(1, 9), { wrapper });
+
+    result.current.mutate(undefined);
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mockedApplyChange).not.toHaveBeenCalled();
+  });
+
+  it('deleting a chapter reports a chapterDeleted with the book and chapter ids', async () => {
+    const { client, wrapper } = setUp();
+    const { result } = renderHook(() => useDeleteChapter(1, 9), { wrapper });
+
+    result.current.mutate(undefined);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockedChapters.deleteChapter).toHaveBeenCalledWith(9);
-    await waitFor(() =>
-      expect(mockedChapters.getChapter).toHaveBeenCalledTimes(3)
-    );
-    expect(mockedChapters.getChapter).toHaveBeenLastCalledWith(10);
-    expect(mockedChapters.getChapter).toHaveBeenCalledTimes(3);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 1] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'chapterDeleted',
+      bookId: 1,
+      id: 9,
+    });
   });
 });

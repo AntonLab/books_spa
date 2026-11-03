@@ -5,7 +5,7 @@ import {
   validatedParams,
   validatedQuery,
 } from '../middleware/validate.ts';
-import { assertMayChange, type CoAuthorTarget } from './coAuthorGuard.ts';
+import type { CoAuthorGuard } from './coAuthorGuard.ts';
 import { sendCover } from './coverResponse.ts';
 import { creditHandlers } from './creditHandlers.ts';
 import type { SeriesRepository } from '../repositories/seriesRepository.ts';
@@ -23,13 +23,10 @@ import type {
 
 // No try/catch anywhere below: the Express 5 router inspects the returned
 // promise and calls next(err) itself when it rejects.
-export function createSeriesController(repository: SeriesRepository) {
-  // Row-level checks go through coAuthorGuard.ts, which holds the rule.
-  const seriesTarget = (id: number): CoAuthorTarget => ({
-    resource: 'Series',
-    id,
-    coAuthorIds: () => repository.findCoAuthorIds(id),
-  });
+export function createSeriesController(
+  repository: SeriesRepository,
+  guard: CoAuthorGuard
+) {
   const MAY_ONLY_CHANGE_OWN = 'You may only change series you co-author';
 
   return {
@@ -64,7 +61,7 @@ export function createSeriesController(repository: SeriesRepository) {
 
     update: async (req, res) => {
       const { id } = validatedParams<{ id: number }>(req);
-      await assertMayChange(req, seriesTarget(id), MAY_ONLY_CHANGE_OWN);
+      await guard.assertMayChange(req, { series: id }, MAY_ONLY_CHANGE_OWN);
 
       const series = await repository.update(
         id,
@@ -76,7 +73,7 @@ export function createSeriesController(repository: SeriesRepository) {
 
     remove: async (req, res) => {
       const { id } = validatedParams<{ id: number }>(req);
-      await assertMayChange(req, seriesTarget(id), MAY_ONLY_CHANGE_OWN);
+      await guard.assertMayChange(req, { series: id }, MAY_ONLY_CHANGE_OWN);
 
       const deleted = await repository.remove(id, actorOf(req));
       if (!deleted) throw new NotFoundError('Series', id);
@@ -84,8 +81,8 @@ export function createSeriesController(repository: SeriesRepository) {
     },
 
     ...creditHandlers({
-      target: seriesTarget,
-      module: 'series',
+      guard,
+      kind: 'series',
       refusal: MAY_ONLY_CHANGE_OWN,
       repository,
     }),
@@ -97,7 +94,7 @@ export function createSeriesController(repository: SeriesRepository) {
       const { id, bookId } = validatedParams<{ id: number; bookId: number }>(
         req
       );
-      await assertMayChange(req, seriesTarget(id), MAY_ONLY_CHANGE_OWN);
+      await guard.assertMayChange(req, { series: id }, MAY_ONLY_CHANGE_OWN);
 
       const removed = await repository.removeBook(id, bookId);
       if (!removed) throw new NotFoundError('Series', id);
@@ -110,7 +107,7 @@ export function createSeriesController(repository: SeriesRepository) {
       if (!Buffer.isBuffer(req.body)) {
         throw new UnsupportedMediaTypeError();
       }
-      await assertMayChange(req, seriesTarget(id), MAY_ONLY_CHANGE_OWN);
+      await guard.assertMayChange(req, { series: id }, MAY_ONLY_CHANGE_OWN);
 
       const processed = await processCoverImage(req.body);
       const found = await repository.setCover(id, processed);
@@ -124,7 +121,7 @@ export function createSeriesController(repository: SeriesRepository) {
     // 204 whether or not a Cover existed, 404 for a missing Series.
     removeCover: async (req, res) => {
       const { id } = validatedParams<{ id: number }>(req);
-      await assertMayChange(req, seriesTarget(id), MAY_ONLY_CHANGE_OWN);
+      await guard.assertMayChange(req, { series: id }, MAY_ONLY_CHANGE_OWN);
 
       const found = await repository.removeCover(id);
       if (!found) throw new NotFoundError('Series', id);

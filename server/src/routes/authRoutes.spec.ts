@@ -364,26 +364,6 @@ test('POST /login accepts the email, in any case, in the login field', async () 
   });
 });
 
-test('an unknown email and a wrong password are indistinguishable', async () => {
-  const { deps } = authDeps();
-  await withApp(deps, async (base) => {
-    await post(base, 'register', registration);
-
-    const wrong = await post(base, 'login', {
-      login: 'bob@example.com',
-      password: 'wrongpassword',
-    });
-    const unknown = await post(base, 'login', {
-      login: 'nobody@example.com',
-      password: 'wrongpassword',
-    });
-
-    assert.equal(wrong.status, 401);
-    assert.equal(unknown.status, 401);
-    assert.deepEqual(await json(wrong), await json(unknown));
-  });
-});
-
 test('an accented lookalike of a registered email answers the same 401 as an unknown one', async () => {
   const { deps } = authDeps();
   await withApp(deps, async (base) => {
@@ -404,15 +384,16 @@ test('an accented lookalike of a registered email answers the same 401 as an unk
   });
 });
 
-test('a blocked account signing in by email is refused with 403', async () => {
+test('POST /login refuses a blocked account with a 403', async () => {
   const { deps, users } = authDeps();
   await withApp(deps, async (base) => {
     const { id } = await json<PublicUser>(
       await post(base, 'register', registration)
     );
     await users.update(id, { status: 'blocked' });
+
     const response = await post(base, 'login', {
-      login: 'bob@example.com',
+      login: 'Bob',
       password: 'hunter2hunter2',
     });
 
@@ -441,42 +422,6 @@ test('POST /login issues a new session rather than reusing the old one', async (
     );
 
     assert.notEqual(first, second);
-  });
-});
-
-test('a wrong password and an unknown login are indistinguishable', async () => {
-  const { deps } = authDeps();
-  await withApp(deps, async (base) => {
-    await post(base, 'register', registration);
-
-    const wrong = await post(base, 'login', {
-      login: 'Bob',
-      password: 'wrongpassword',
-    });
-    const unknown = await post(base, 'login', {
-      login: 'Nobody',
-      password: 'wrongpassword',
-    });
-
-    assert.equal(wrong.status, 401);
-    assert.equal(unknown.status, 401);
-    assert.deepEqual(await json(wrong), await json(unknown));
-  });
-});
-
-test('a blocked account is refused with 403', async () => {
-  const { deps, users } = authDeps();
-  await withApp(deps, async (base) => {
-    const { id } = await json<PublicUser>(
-      await post(base, 'register', registration)
-    );
-    await users.update(id, { status: 'blocked' });
-    const response = await post(base, 'login', {
-      login: 'Bob',
-      password: 'hunter2hunter2',
-    });
-
-    assert.equal(response.status, 403);
   });
 });
 
@@ -610,24 +555,6 @@ test('login without a cookie, or with a token no row matches, still succeeds and
   });
 });
 
-test('a wrong password leaves the presented session alive', async () => {
-  const { deps } = authDeps();
-  await withApp(deps, async (base) => {
-    await post(base, 'register', registration);
-    const tokenA = sessionToken(await post(base, 'login', loginBody));
-
-    const response = await post(
-      base,
-      'login',
-      { ...loginBody, password: 'wrong-password-123' },
-      `${SESSION_COOKIE_NAME}=${tokenA}`
-    );
-
-    assert.equal(response.status, 401);
-    assert.equal(await meStatus(base, tokenA), 200);
-  });
-});
-
 test("the presented cookie of another account's session is revoked too", async () => {
   const { deps } = authDeps();
   await withApp(deps, async (base) => {
@@ -748,30 +675,6 @@ test('a reset request answers 202 before the mail send settles, and logs a faile
         meta: { userId: registered.id, error: 'smtp down' },
       },
     ]);
-  });
-});
-
-test('a reset request answers 202 when the token write fails', async (t) => {
-  recordLogs(t); // silences the failure log; the controller spec owns its content
-  const { deps } = authDeps();
-  const failingDeps = {
-    ...deps,
-    passwordResetRepository: {
-      ...deps.passwordResetRepository,
-      replaceForUser: async () => {
-        throw new Error('db down');
-      },
-    },
-  };
-
-  await withApp(failingDeps, async (base) => {
-    await post(base, 'register', registration);
-    const response = await post(base, 'password-reset/request', {
-      email: 'bob@example.com',
-    });
-    await flushDetached();
-
-    assert.equal(response.status, 202);
   });
 });
 
@@ -1026,6 +929,27 @@ test('POST /password-reset/request refuses the 6th request from one address with
         (await post(base, 'password-reset/request', request)).status,
         429
       );
+    });
+  } finally {
+    limits.stop();
+  }
+});
+
+test('POST /password-reset/confirm refuses the 11th request from one address within the hour, malformed or not', async () => {
+  const { deps } = authDeps();
+  const limits = createAuthRateLimits();
+  try {
+    await withApp({ ...deps, authRateLimits: limits }, async (base) => {
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        assert.equal(
+          (await post(base, 'password-reset/confirm', {})).status,
+          400
+        );
+      }
+
+      const refused = await post(base, 'password-reset/confirm', {});
+      assert.equal(refused.status, 429);
+      assert.match(refused.headers.get('retry-after') ?? '', /^\d+$/);
     });
   } finally {
     limits.stop();

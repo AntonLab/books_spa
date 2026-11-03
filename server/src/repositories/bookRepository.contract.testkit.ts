@@ -162,19 +162,6 @@ export function bookRepositoryContract(
     );
   });
 
-  test('contract: findSeriesCoAuthorIds lists a series co-authors in credit order, null when it is missing', async () => {
-    const { repository, anAuthor, aSeries } = await setUp();
-    const earlierId = await anAuthor();
-    const laterId = await anAuthor();
-    const seriesId = await aSeries([laterId, earlierId]);
-
-    assert.deepEqual(await repository.findSeriesCoAuthorIds(seriesId), [
-      laterId,
-      earlierId,
-    ]);
-    assert.equal(await repository.findSeriesCoAuthorIds(MISSING_ID), null);
-  });
-
   test('contract: an update applies the fields given and leaves the rest', async () => {
     const { repository, anAuthor } = await setUp();
     const authorId = await anAuthor();

@@ -445,7 +445,7 @@ describe('BookPage', () => {
   });
 
   it('hides the star from a co-author', async () => {
-    renderPage({ ...reader, id: 4 });
+    renderPage({ ...reader, id: 4, role: 'author' });
 
     await screen.findByRole('button', { name: 'Edit' });
     expect(screen.queryByRole('button', { name: /favorites/i })).toBeNull();

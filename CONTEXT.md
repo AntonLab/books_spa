@@ -108,7 +108,7 @@ _Avoid_: Sign out (for a session the Account did not end itself)
 An Account status reserved for a future email-verification step. A Pending
 Account signs in like an Active one but has no Public profile
 (`AccountRepository.findProfile`). Registration sets `active`
-(`register` in `createAuthController`), so no current Account is Pending.
+(`register` in `createAccountSession`), so no current Account is Pending.
 
 **Avatar**:
 The optional picture an Account shows beside its name, whatever its Role. An

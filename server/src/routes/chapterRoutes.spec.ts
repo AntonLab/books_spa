@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { AppDeps } from '../app.ts';
 import { CHAPTER_JSON_LIMIT_BYTES } from './chapterRoutes.ts';
 import { StateConflictError } from '../types/errors.ts';
+import type { BookRepository } from '../repositories/bookRepository.ts';
 import type { ChapterRepository } from '../repositories/chapterRepository.ts';
 import { createFakeChapterRepository } from '../repositories/chapterRepository.fake.testkit.ts';
 import {
@@ -12,6 +13,7 @@ import {
 } from 'shared';
 import {
   json,
+  lookupOnlyRepository,
   ROLE_COOKIES,
   USER_IDS,
   withApp,
@@ -36,6 +38,13 @@ const BOOK_CO_AUTHORS = new Map<number, number[]>([
 // routes owe it is the validated body, which is what a test can check here.
 const createFakeRepository = (inputs: unknown[] = []): ChapterRepository =>
   createFakeChapterRepository({ books: BOOK_CO_AUTHORS, inputs });
+
+// The guard reads a book's Co-authors from the book repository, which here only
+// answers that lookup from the same map the chapter fake uses.
+const appDeps = (chapterRepository = createFakeRepository()) => ({
+  chapterRepository,
+  bookRepository: lookupOnlyRepository<BookRepository>('book', BOOK_CO_AUTHORS),
+});
 
 const valid = {
   bookId: KNOWN_BOOK_ID,
@@ -92,216 +101,174 @@ const remove = (
   });
 
 test('POST creates a chapter and echoes its title and body', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const response = await post(base, valid);
-      const body = await json<PublicChapter>(response);
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const response = await post(base, valid);
+    const body = await json<PublicChapter>(response);
 
-      assert.equal(response.status, 201);
-      assert.equal(body.bookId, KNOWN_BOOK_ID);
-      assert.equal(body.title, 'Chapter One');
-      assert.equal(body.text, 'It was a dark night.');
-    }
-  );
+    assert.equal(response.status, 201);
+    assert.equal(body.bookId, KNOWN_BOOK_ID);
+    assert.equal(body.title, 'Chapter One');
+    assert.equal(body.text, 'It was a dark night.');
+  });
 });
 
 test('POST trims the title before storing it', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const response = await post(base, { ...valid, title: '  Prologue  ' });
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const response = await post(base, { ...valid, title: '  Prologue  ' });
 
-      assert.equal((await json<PublicChapter>(response)).title, 'Prologue');
-    }
-  );
+    assert.equal((await json<PublicChapter>(response)).title, 'Prologue');
+  });
 });
 
 test('POST rejects a missing title with 400', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const response = await post(base, {
-        bookId: KNOWN_BOOK_ID,
-        text: 'No title',
-      });
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const response = await post(base, {
+      bookId: KNOWN_BOOK_ID,
+      text: 'No title',
+    });
 
-      assert.equal(response.status, 400);
-      assert.match(
-        (await json<{ error: string }>(response)).error,
-        /validation/i
-      );
-    }
-  );
+    assert.equal(response.status, 400);
+    assert.match(
+      (await json<{ error: string }>(response)).error,
+      /validation/i
+    );
+  });
 });
 
 test('POST rejects a missing bookId with 400 — a chapter needs a book', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const response = await post(base, { title: 'Orphan', text: 'No book' });
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const response = await post(base, { title: 'Orphan', text: 'No book' });
 
-      assert.equal(response.status, 400);
-    }
-  );
+    assert.equal(response.status, 400);
+  });
 });
 
 test('POST against an unknown book is a 404, not a 500', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const response = await post(base, { ...valid, bookId: 999 });
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const response = await post(base, { ...valid, bookId: 999 });
 
-      assert.equal(response.status, 404);
-      assert.match(
-        (await json<{ error: string }>(response)).error,
-        /Book 999 not found/
-      );
-    }
-  );
+    assert.equal(response.status, 404);
+    assert.match(
+      (await json<{ error: string }>(response)).error,
+      /Book 999 not found/
+    );
+  });
 });
 
 test('GET / lists chapters without their bodies', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      await post(base, valid);
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    await post(base, valid);
 
-      const response = await fetch(`${base}/api/chapters?bookId=1`);
-      const body = await json<{ items: ChapterSummary[]; total: number }>(
-        response
-      );
+    const response = await fetch(`${base}/api/chapters?bookId=1`);
+    const body = await json<{ items: ChapterSummary[]; total: number }>(
+      response
+    );
 
-      assert.equal(response.status, 200);
-      assert.equal(body.total, 1);
-      assert.equal(body.items[0]?.title, 'Chapter One');
-      assert.ok(!('text' in (body.items[0] ?? {})));
-    }
-  );
+    assert.equal(response.status, 200);
+    assert.equal(body.total, 1);
+    assert.equal(body.items[0]?.title, 'Chapter One');
+    assert.ok(!('text' in (body.items[0] ?? {})));
+  });
 });
 
 test('GET /:id returns the body the list withheld', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(await post(base, valid));
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(await post(base, valid));
 
-      const response = await fetch(`${base}/api/chapters/${created.id}`);
+    const response = await fetch(`${base}/api/chapters/${created.id}`);
 
-      assert.equal(response.status, 200);
-      assert.equal(
-        (await json<PublicChapter>(response)).text,
-        'It was a dark night.'
-      );
-    }
-  );
+    assert.equal(response.status, 200);
+    assert.equal(
+      (await json<PublicChapter>(response)).text,
+      'It was a dark night.'
+    );
+  });
 });
 
 test('GET /:id for an unknown chapter is a 404', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const response = await fetch(`${base}/api/chapters/999`);
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const response = await fetch(`${base}/api/chapters/999`);
 
-      assert.equal(response.status, 404);
-      assert.match(
-        (await json<{ error: string }>(response)).error,
-        /Chapter 999 not found/
-      );
-    }
-  );
+    assert.equal(response.status, 404);
+    assert.match(
+      (await json<{ error: string }>(response)).error,
+      /Chapter 999 not found/
+    );
+  });
 });
 
 test('PATCH renames a chapter without touching its body', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(await post(base, valid));
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(await post(base, valid));
 
-      const response = await patch(base, created.id, { title: 'Renamed' });
-      const body = await json<PublicChapter>(response);
+    const response = await patch(base, created.id, { title: 'Renamed' });
+    const body = await json<PublicChapter>(response);
 
-      assert.equal(response.status, 200);
-      assert.equal(body.title, 'Renamed');
-      assert.equal(body.text, 'It was a dark night.');
-    }
-  );
+    assert.equal(response.status, 200);
+    assert.equal(body.title, 'Renamed');
+    assert.equal(body.text, 'It was a dark night.');
+  });
 });
 
 test('POST accepts a text of exactly CHAPTER_TEXT_MAX_LENGTH characters', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const response = await post(base, {
-        ...valid,
-        text: 'x'.repeat(CHAPTER_TEXT_MAX_LENGTH),
-        publishedAt: null,
-      });
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const response = await post(base, {
+      ...valid,
+      text: 'x'.repeat(CHAPTER_TEXT_MAX_LENGTH),
+      publishedAt: null,
+    });
 
-      assert.equal(response.status, 201);
-    }
-  );
+    assert.equal(response.status, 201);
+  });
 });
 
 test('PATCH accepts a text of exactly CHAPTER_TEXT_MAX_LENGTH characters', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(await post(base, valid));
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(await post(base, valid));
 
-      const response = await patch(base, created.id, {
-        text: 'x'.repeat(CHAPTER_TEXT_MAX_LENGTH),
-      });
+    const response = await patch(base, created.id, {
+      text: 'x'.repeat(CHAPTER_TEXT_MAX_LENGTH),
+    });
 
-      assert.equal(response.status, 200);
-    }
-  );
+    assert.equal(response.status, 200);
+  });
 });
 
 test('POST and PATCH answer 413 for a body over the 5 MiB chapter limit', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(await post(base, valid));
-      const text = 'x'.repeat(CHAPTER_JSON_LIMIT_BYTES + 1);
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(await post(base, valid));
+    const text = 'x'.repeat(CHAPTER_JSON_LIMIT_BYTES + 1);
 
-      assert.equal((await post(base, { ...valid, text })).status, 413);
-      assert.equal((await patch(base, created.id, { text })).status, 413);
-    }
-  );
+    assert.equal((await post(base, { ...valid, text })).status, 413);
+    assert.equal((await patch(base, created.id, { text })).status, 413);
+  });
 });
 
 // A text over CHAPTER_TEXT_MAX_LENGTH answers 400 from the text-length rule,
 // which only runs once the parser has accepted the body: a 400, not a 413, is
 // what proves the 5 MiB limit holds just under its edge.
 test('POST and PATCH accept a body just under the 5 MiB chapter limit', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(await post(base, valid));
-      const text = 'x'.repeat(CHAPTER_JSON_LIMIT_BYTES - 1024);
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(await post(base, valid));
+    const text = 'x'.repeat(CHAPTER_JSON_LIMIT_BYTES - 1024);
 
-      assert.equal((await post(base, { ...valid, text })).status, 400);
-      assert.equal((await patch(base, created.id, { text })).status, 400);
-    }
-  );
+    assert.equal((await post(base, { ...valid, text })).status, 400);
+    assert.equal((await patch(base, created.id, { text })).status, 400);
+  });
 });
 
 test('POST and PATCH without a session answer 401 for a body over the 5 MiB limit, before the body is read', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(await post(base, valid));
-      const text = 'x'.repeat(CHAPTER_JSON_LIMIT_BYTES + 1);
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(await post(base, valid));
+    const text = 'x'.repeat(CHAPTER_JSON_LIMIT_BYTES + 1);
 
-      assert.equal((await post(base, { ...valid, text }, null)).status, 401);
-      assert.equal((await patch(base, created.id, { text }, null)).status, 401);
-    }
-  );
+    assert.equal((await post(base, { ...valid, text }, null)).status, 401);
+    assert.equal((await patch(base, created.id, { text }, null)).status, 401);
+  });
 });
 
 test('a differently cased path is treated like /api/chapters: 401 without a session, not 413', async () => {
-  await withApp({ chapterRepository: createFakeRepository() }, async (base) => {
+  await withApp(appDeps(), async (base) => {
     const response = await fetch(`${base}/API/Chapters`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -316,84 +283,69 @@ test('a differently cased path is treated like /api/chapters: 401 without a sess
 });
 
 test('another chapter route keeps the 100 KB global body limit', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const response = await fetch(
-        `${base}/api/chapters/1/illustration-order`,
-        {
-          method: 'PUT',
-          headers: {
-            'content-type': 'application/json',
-            cookie: ROLE_COOKIES.author,
-          },
-          body: JSON.stringify({ padding: 'x'.repeat(102_400) }),
-        }
-      );
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const response = await fetch(`${base}/api/chapters/1/illustration-order`, {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        cookie: ROLE_COOKIES.author,
+      },
+      body: JSON.stringify({ padding: 'x'.repeat(102_400) }),
+    });
 
-      assert.equal(response.status, 413);
-    }
-  );
+    assert.equal(response.status, 413);
+  });
 });
 
 test('PATCH rejects an empty body with 400', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(await post(base, valid));
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(await post(base, valid));
 
-      assert.equal((await patch(base, created.id, {})).status, 400);
-    }
-  );
+    assert.equal((await patch(base, created.id, {})).status, 400);
+  });
 });
 
 test('PATCH ignores bookId — a chapter cannot be moved between books', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(await post(base, valid));
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(await post(base, valid));
 
-      const body = await json<PublicChapter>(
-        await patch(base, created.id, { bookId: 42, title: 'Renamed' })
-      );
+    const body = await json<PublicChapter>(
+      await patch(base, created.id, { bookId: 42, title: 'Renamed' })
+    );
 
-      assert.equal(body.bookId, KNOWN_BOOK_ID);
-    }
-  );
+    assert.equal(body.bookId, KNOWN_BOOK_ID);
+  });
 });
 
 test('DELETE removes a chapter, and a second attempt is a 404', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(await post(base, valid));
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(await post(base, valid));
 
-      assert.equal((await remove(base, created.id)).status, 204);
-      assert.equal((await remove(base, created.id)).status, 404);
-    }
-  );
+    assert.equal((await remove(base, created.id)).status, 204);
+    assert.equal((await remove(base, created.id)).status, 404);
+  });
 });
 
 test('POST without a session is 401', async () => {
-  await withApp({ chapterRepository: createFakeRepository() }, async (base) => {
+  await withApp(appDeps(), async (base) => {
     assert.equal((await post(base, valid, null)).status, 401);
   });
 });
 
 test('PATCH without a session is 401', async () => {
-  await withApp({ chapterRepository: createFakeRepository() }, async (base) => {
+  await withApp(appDeps(), async (base) => {
     assert.equal((await patch(base, 1, { title: 'New' }, null)).status, 401);
   });
 });
 
 test('DELETE without a session is 401', async () => {
-  await withApp({ chapterRepository: createFakeRepository() }, async (base) => {
+  await withApp(appDeps(), async (base) => {
     assert.equal((await remove(base, 1, null)).status, 401);
   });
 });
 
 test('GET stays public', async () => {
-  await withApp({ chapterRepository: createFakeRepository() }, async (base) => {
+  await withApp(appDeps(), async (base) => {
     assert.equal((await fetch(`${base}/api/chapters`)).status, 200);
   });
 });
@@ -401,135 +353,174 @@ test('GET stays public', async () => {
 // --- The permission matrix: who may create, edit and delete a chapter. ---
 
 test('an author adds a chapter to their own book', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      assert.equal((await post(base, valid, ROLE_COOKIES.author)).status, 201);
-    }
-  );
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    assert.equal((await post(base, valid, ROLE_COOKIES.author)).status, 201);
+  });
 });
 
 test('an author may not add a chapter to another author book', async () => {
   // The hole this closes: gating books alone would leave the neighbouring
   // endpoint open, and anyone could append to someone else's book.
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const response = await post(base, valid, ROLE_COOKIES.otherAuthor);
-      assert.equal(response.status, 403);
-    }
-  );
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const response = await post(base, valid, ROLE_COOKIES.otherAuthor);
+    assert.equal(response.status, 403);
+  });
 });
 
 test('a plain user may not add a chapter at all', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      assert.equal((await post(base, valid, ROLE_COOKIES.user)).status, 403);
-    }
-  );
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    assert.equal((await post(base, valid, ROLE_COOKIES.user)).status, 403);
+  });
 });
 
 test('an admin may edit any chapter but create none', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      assert.equal((await post(base, valid, ROLE_COOKIES.admin)).status, 403);
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    assert.equal((await post(base, valid, ROLE_COOKIES.admin)).status, 403);
 
-      const created = await json<PublicChapter>(
-        await post(base, valid, ROLE_COOKIES.author)
-      );
-      assert.equal(
-        (await patch(base, created.id, { title: 'Fixed' }, ROLE_COOKIES.admin))
-          .status,
-        200
-      );
-    }
-  );
+    const created = await json<PublicChapter>(
+      await post(base, valid, ROLE_COOKIES.author)
+    );
+    assert.equal(
+      (await patch(base, created.id, { title: 'Fixed' }, ROLE_COOKIES.admin))
+        .status,
+      200
+    );
+  });
 });
 
 test('an author may not edit a chapter in another author book', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(
-        await post(base, valid, ROLE_COOKIES.author)
-      );
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(
+      await post(base, valid, ROLE_COOKIES.author)
+    );
 
-      const response = await patch(
-        base,
-        created.id,
-        { title: 'Hijacked' },
-        ROLE_COOKIES.otherAuthor
-      );
-      assert.equal(response.status, 403);
+    const response = await patch(
+      base,
+      created.id,
+      { title: 'Hijacked' },
+      ROLE_COOKIES.otherAuthor
+    );
+    assert.equal(response.status, 403);
 
-      const stored = await json<PublicChapter>(
-        await fetch(`${base}/api/chapters/${created.id}`)
-      );
-      assert.equal(stored.title, 'Chapter One');
-    }
-  );
+    const stored = await json<PublicChapter>(
+      await fetch(`${base}/api/chapters/${created.id}`)
+    );
+    assert.equal(stored.title, 'Chapter One');
+  });
 });
 
 test('an author may not delete a chapter in another author book', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(
-        await post(base, valid, ROLE_COOKIES.author)
-      );
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(
+      await post(base, valid, ROLE_COOKIES.author)
+    );
 
-      const response = await remove(base, created.id, ROLE_COOKIES.otherAuthor);
-      assert.equal(response.status, 403);
+    const response = await remove(base, created.id, ROLE_COOKIES.otherAuthor);
+    assert.equal(response.status, 403);
 
-      // The row must survive the refused attempt, not just the status code.
-      const stillThere = await fetch(`${base}/api/chapters/${created.id}`);
-      assert.equal(stillThere.status, 200);
-    }
-  );
+    // The row must survive the refused attempt, not just the status code.
+    const stillThere = await fetch(`${base}/api/chapters/${created.id}`);
+    assert.equal(stillThere.status, 200);
+  });
 });
 
 test('an admin may delete a chapter in another author book', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await json<PublicChapter>(
-        await post(base, valid, ROLE_COOKIES.author)
-      );
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await json<PublicChapter>(
+      await post(base, valid, ROLE_COOKIES.author)
+    );
 
-      assert.equal(
-        (await remove(base, created.id, ROLE_COOKIES.admin)).status,
-        204
+    assert.equal(
+      (await remove(base, created.id, ROLE_COOKIES.admin)).status,
+      204
+    );
+  });
+});
+
+// --- What each refusal says, and which row it blames. ---
+
+test('POST to a book the author does not co-author is refused with the add-chapters message', async () => {
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const response = await post(base, valid, ROLE_COOKIES.otherAuthor);
+
+    assert.equal(response.status, 403);
+    assert.equal(
+      (await json<{ error: string }>(response)).error,
+      'You may only add chapters to books you co-author'
+    );
+  });
+});
+
+test('PATCH and DELETE on a missing chapter are a 404 naming the Chapter', async () => {
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    for (const response of [
+      await patch(base, 999, { title: 'Ghost' }),
+      await remove(base, 999),
+    ]) {
+      assert.equal(response.status, 404);
+      assert.match(
+        (await json<{ error: string }>(response)).error,
+        /Chapter 999 not found/
       );
     }
-  );
+  });
+});
+
+test('PATCH and DELETE by an uncredited author are refused with the change-chapters message', async () => {
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const { id } = await json<PublicChapter>(await post(base, valid));
+
+    for (const response of [
+      await patch(base, id, { title: 'Hijacked' }, ROLE_COOKIES.otherAuthor),
+      await remove(base, id, ROLE_COOKIES.otherAuthor),
+    ]) {
+      assert.equal(response.status, 403);
+      assert.equal(
+        (await json<{ error: string }>(response)).error,
+        'You may only change chapters in books you co-author'
+      );
+    }
+  });
+});
+
+test('PUT chapter-order by an uncredited author is refused with the reorder message', async () => {
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const response = await putOrder(
+      base,
+      KNOWN_BOOK_ID,
+      { chapterIds: [1] },
+      ROLE_COOKIES.otherAuthor
+    );
+
+    assert.equal(response.status, 403);
+    assert.equal(
+      (await json<{ error: string }>(response)).error,
+      'You may only reorder chapters in books you co-author'
+    );
+  });
 });
 
 // --- A book's chapters belong to every one of its Co-authors (ADR-0005). ---
 
 test('a co-author who did not create the book may add and edit its chapters', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const created = await post(
-        base,
-        { ...valid, bookId: SHARED_BOOK_ID },
-        ROLE_COOKIES.otherAuthor
-      );
-      assert.equal(created.status, 201);
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const created = await post(
+      base,
+      { ...valid, bookId: SHARED_BOOK_ID },
+      ROLE_COOKIES.otherAuthor
+    );
+    assert.equal(created.status, 201);
 
-      const { id } = await json<PublicChapter>(created);
-      const edited = await patch(
-        base,
-        id,
-        { title: 'Renamed' },
-        ROLE_COOKIES.otherAuthor
-      );
-      assert.equal(edited.status, 200);
-      assert.equal((await remove(base, id, ROLE_COOKIES.author)).status, 204);
-    }
-  );
+    const { id } = await json<PublicChapter>(created);
+    const edited = await patch(
+      base,
+      id,
+      { title: 'Renamed' },
+      ROLE_COOKIES.otherAuthor
+    );
+    assert.equal(edited.status, 200);
+    assert.equal((await remove(base, id, ROLE_COOKIES.author)).status, 204);
+  });
 });
 
 // --- Publication time and the version check (CONTEXT.md). ---
@@ -537,7 +528,7 @@ test('a co-author who did not create the book may add and edit its chapters', as
 test('POST passes the publication time through, a draft when omitted', async () => {
   const inputs: unknown[] = [];
   await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository(inputs) },
+    appDeps(createFakeRepository(inputs)),
     async (base) => {
       const later = new Date(Date.now() + 86_400_000).toISOString();
 
@@ -555,39 +546,33 @@ test('POST passes the publication time through, a draft when omitted', async () 
 });
 
 test('POST refuses a publication time that is neither now, a moment, nor null', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      for (const publishedAt of ['tomorrow', 12, '2026-13-01']) {
-        assert.equal((await post(base, { ...valid, publishedAt })).status, 400);
-      }
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    for (const publishedAt of ['tomorrow', 12, '2026-13-01']) {
+      assert.equal((await post(base, { ...valid, publishedAt })).status, 400);
     }
-  );
+  });
 });
 
 test('PATCH without the updatedAt it was based on is a 400', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const { id } = await json<PublicChapter>(await post(base, valid));
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const { id } = await json<PublicChapter>(await post(base, valid));
 
-      const response = await fetch(`${base}/api/chapters/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'content-type': 'application/json',
-          cookie: ROLE_COOKIES.author,
-        },
-        body: JSON.stringify({ title: 'Renamed' }),
-      });
-      assert.equal(response.status, 400);
-    }
-  );
+    const response = await fetch(`${base}/api/chapters/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+        cookie: ROLE_COOKIES.author,
+      },
+      body: JSON.stringify({ title: 'Renamed' }),
+    });
+    assert.equal(response.status, 400);
+  });
 });
 
 test('PATCH hands the repository the version and the publication time it was sent', async () => {
   const inputs: unknown[] = [];
   await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository(inputs) },
+    appDeps(createFakeRepository(inputs)),
     async (base) => {
       const { id, updatedAt } = await json<PublicChapter>(
         await post(base, valid)
@@ -610,6 +595,7 @@ test('a conflict from the repository reaches the caller as a 409', async () => {
   const repository = createFakeRepository();
   await withAuthenticatedApp(
     {
+      ...appDeps(),
       chapterRepository: {
         ...repository,
         async update() {
@@ -652,7 +638,7 @@ const putOrder = (
 test('PUT chapter-order hands the repository the new Reading order and answers 204', async () => {
   const inputs: unknown[] = [];
   await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository(inputs) },
+    appDeps(createFakeRepository(inputs)),
     async (base) => {
       const response = await putOrder(base, KNOWN_BOOK_ID, {
         chapterIds: [3, 1, 2],
@@ -668,70 +654,59 @@ test('PUT chapter-order hands the repository the new Reading order and answers 2
 });
 
 test('PUT chapter-order refuses an empty or repeating list with 400', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      for (const chapterIds of [[], [1, 1], ['x']]) {
-        assert.equal(
-          (await putOrder(base, KNOWN_BOOK_ID, { chapterIds })).status,
-          400
-        );
-      }
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    for (const chapterIds of [[], [1, 1], ['x']]) {
+      assert.equal(
+        (await putOrder(base, KNOWN_BOOK_ID, { chapterIds })).status,
+        400
+      );
     }
-  );
+  });
 });
 
 test('PUT chapter-order takes the permission to edit the book chapters', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const body = { chapterIds: [1, 2] };
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const body = { chapterIds: [1, 2] };
 
-      assert.equal(
-        (await putOrder(base, KNOWN_BOOK_ID, body, null)).status,
-        401
-      );
-      assert.equal(
-        (await putOrder(base, KNOWN_BOOK_ID, body, ROLE_COOKIES.user)).status,
-        403
-      );
-      assert.equal(
-        (await putOrder(base, KNOWN_BOOK_ID, body, ROLE_COOKIES.otherAuthor))
-          .status,
-        403
-      );
-      assert.equal(
-        (await putOrder(base, SHARED_BOOK_ID, body, ROLE_COOKIES.otherAuthor))
-          .status,
-        204
-      );
-      assert.equal(
-        (await putOrder(base, KNOWN_BOOK_ID, body, ROLE_COOKIES.admin)).status,
-        204
-      );
-    }
-  );
+    assert.equal((await putOrder(base, KNOWN_BOOK_ID, body, null)).status, 401);
+    assert.equal(
+      (await putOrder(base, KNOWN_BOOK_ID, body, ROLE_COOKIES.user)).status,
+      403
+    );
+    assert.equal(
+      (await putOrder(base, KNOWN_BOOK_ID, body, ROLE_COOKIES.otherAuthor))
+        .status,
+      403
+    );
+    assert.equal(
+      (await putOrder(base, SHARED_BOOK_ID, body, ROLE_COOKIES.otherAuthor))
+        .status,
+      204
+    );
+    assert.equal(
+      (await putOrder(base, KNOWN_BOOK_ID, body, ROLE_COOKIES.admin)).status,
+      204
+    );
+  });
 });
 
 test('PUT chapter-order on an unknown book is a 404, for a co-author and a moderator alike', async () => {
-  await withAuthenticatedApp(
-    { chapterRepository: createFakeRepository() },
-    async (base) => {
-      const body = { chapterIds: [1] };
+  await withAuthenticatedApp(appDeps(), async (base) => {
+    const body = { chapterIds: [1] };
 
-      assert.equal((await putOrder(base, 999, body)).status, 404);
-      assert.equal(
-        (await putOrder(base, 999, body, ROLE_COOKIES.admin)).status,
-        404
-      );
-    }
-  );
+    assert.equal((await putOrder(base, 999, body)).status, 404);
+    assert.equal(
+      (await putOrder(base, 999, body, ROLE_COOKIES.admin)).status,
+      404
+    );
+  });
 });
 
 test('a reorder conflict from the repository reaches the caller as a 409', async () => {
   const repository = createFakeRepository();
   await withAuthenticatedApp(
     {
+      ...appDeps(),
       chapterRepository: {
         ...repository,
         async reorder() {
@@ -764,36 +739,112 @@ const uploadGarbage = (base: string) =>
     body: 'not an image',
   });
 
+const ILLUSTRATION_ID = 7;
+const CHAPTER_CO_AUTHORS = new Map<number, number[]>([[1, [USER_IDS.author]]]);
+const ILLUSTRATION_CO_AUTHORS = new Map<number, number[]>([
+  [ILLUSTRATION_ID, [USER_IDS.author]],
+]);
+
 const illustrationRepositoryWith = (
   full: boolean
 ): AppDeps['illustrationRepository'] =>
   ({
-    async findChapterCoAuthorIds() {
-      return [USER_IDS.author];
+    async findCoAuthorIds(id: number) {
+      return ILLUSTRATION_CO_AUTHORS.get(id) ?? null;
     },
     async isFull() {
       return full;
     },
   }) as unknown as AppDeps['illustrationRepository'];
 
-test('an upload past the illustration cap is refused with a 409 before the image is decoded', () =>
-  withAuthenticatedApp(
-    { illustrationRepository: illustrationRepositoryWith(true) },
-    async (base) => {
-      const response = await uploadGarbage(base);
+const illustrationDeps = (full: boolean) => ({
+  illustrationRepository: illustrationRepositoryWith(full),
+  chapterRepository: lookupOnlyRepository<ChapterRepository>(
+    'chapter',
+    CHAPTER_CO_AUTHORS
+  ),
+});
 
-      assert.equal(response.status, 409);
+const uploadTo = (base: string, chapterId: number, cookie: string) =>
+  fetch(`${base}/api/chapters/${chapterId}/illustrations`, {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain', cookie },
+    body: 'not an image',
+  });
+
+test('an uncredited author is refused an upload with a 403, before the media type and the cap', () =>
+  withAuthenticatedApp(illustrationDeps(true), async (base) => {
+    const response = await uploadTo(base, 1, ROLE_COOKIES.otherAuthor);
+
+    assert.equal(response.status, 403);
+  }));
+
+test('a credited author gets 415 for a non-image body, then 409 on a full chapter', () =>
+  withAuthenticatedApp(illustrationDeps(true), async (base) => {
+    assert.equal((await uploadTo(base, 1, ROLE_COOKIES.author)).status, 415);
+    assert.equal((await uploadGarbage(base)).status, 409);
+  }));
+
+test('an upload to a missing chapter is a 404 naming the chapter', () =>
+  withAuthenticatedApp(illustrationDeps(false), async (base) => {
+    const response = await uploadTo(base, 999, ROLE_COOKIES.author);
+
+    assert.equal(response.status, 404);
+    assert.match((await json<{ error: string }>(response)).error, /Chapter/);
+  }));
+
+test('PATCH and DELETE of an illustration: missing is 404, uncredited is 403', () =>
+  withAuthenticatedApp(illustrationDeps(false), async (base) => {
+    for (const method of ['PATCH', 'DELETE']) {
+      const call = (id: number, cookie: string) =>
+        fetch(`${base}/api/illustrations/${id}`, {
+          method,
+          headers: { 'content-type': 'application/json', cookie },
+          body: method === 'PATCH' ? JSON.stringify({ caption: 'x' }) : null,
+        });
+
+      const missing = await call(999, ROLE_COOKIES.author);
+      assert.equal(missing.status, 404, method);
       assert.match(
-        (await json<{ error: string }>(response)).error,
-        /at most 20 illustrations/
+        (await json<{ error: string }>(missing)).error,
+        /Illustration/
+      );
+
+      const uncredited = await call(ILLUSTRATION_ID, ROLE_COOKIES.otherAuthor);
+      assert.equal(uncredited.status, 403, method);
+      assert.match(
+        (await json<{ error: string }>(uncredited)).error,
+        /co-author/
       );
     }
-  ));
+  }));
+
+test('PUT illustration-order by an uncredited author is a 403', () =>
+  withAuthenticatedApp(illustrationDeps(false), async (base) => {
+    const response = await fetch(`${base}/api/chapters/1/illustration-order`, {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        cookie: ROLE_COOKIES.otherAuthor,
+      },
+      body: JSON.stringify({ illustrationIds: [1] }),
+    });
+
+    assert.equal(response.status, 403);
+  }));
+
+test('an upload past the illustration cap is refused with a 409 before the image is decoded', () =>
+  withAuthenticatedApp(illustrationDeps(true), async (base) => {
+    const response = await uploadGarbage(base);
+
+    assert.equal(response.status, 409);
+    assert.match(
+      (await json<{ error: string }>(response)).error,
+      /at most 20 illustrations/
+    );
+  }));
 
 test('an upload under the illustration cap is decoded', () =>
-  withAuthenticatedApp(
-    { illustrationRepository: illustrationRepositoryWith(false) },
-    async (base) => {
-      assert.equal((await uploadGarbage(base)).status, 400);
-    }
-  ));
+  withAuthenticatedApp(illustrationDeps(false), async (base) => {
+    assert.equal((await uploadGarbage(base)).status, 400);
+  }));

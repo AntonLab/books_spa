@@ -9,14 +9,17 @@ import {
   useGenresWithBooks,
   useUpdateGenre,
 } from './genres';
+import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
 import { createTestQueryClient } from '../test/queryClient';
 import { adminGenre, genreItem, publicGenre } from '../test/genres';
 import * as genresApi from '../api/genres';
 
 jest.mock('../api/genres');
+jest.mock('./applyChange', () => ({ applyChange: jest.fn() }));
 
 const mockedGenres = jest.mocked(genresApi);
+const mockedApplyChange = jest.mocked(applyChange);
 
 const wrapper = (client = createTestQueryClient()) => {
   const Wrapper = ({ children }: { children: ReactNode }) => (
@@ -28,6 +31,7 @@ const wrapper = (client = createTestQueryClient()) => {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockedApplyChange.mockResolvedValue(undefined);
 });
 
 describe('useGenres', () => {
@@ -95,14 +99,11 @@ describe('useGenresCounts', () => {
 });
 
 describe('useUpdateGenre', () => {
-  it('sends the payload for its id and invalidates genres, counts, books and series', async () => {
+  it('sends the payload for its id and reports genreChanged', async () => {
     mockedGenres.updateGenre.mockResolvedValue(
       publicGenre(2, 'Urban Fantasy', { id: 1, name: 'Fantasy' })
     );
     const client = createTestQueryClient();
-    client.setQueryData(queryKeys.genresCounts, { items: [] });
-    client.setQueryData(['books', 1], {});
-    client.setQueryData(['series', 1], {});
     const { result } = renderHook(() => useUpdateGenre(), {
       wrapper: wrapper(client),
     });
@@ -112,17 +113,32 @@ describe('useUpdateGenre', () => {
     });
 
     expect(mockedGenres.updateGenre).toHaveBeenCalledWith(2, { parentId: 1 });
-    for (const key of [queryKeys.genresCounts, ['books', 1], ['series', 1]]) {
-      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
-    }
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'genreChanged',
+    });
+  });
+
+  it('reports nothing when the update fails', async () => {
+    mockedGenres.updateGenre.mockRejectedValue(new Error('nope'));
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => useUpdateGenre(), {
+      wrapper: wrapper(client),
+    });
+
+    await act(async () => {
+      await expect(
+        result.current.mutateAsync({ id: 2, payload: { parentId: 1 } })
+      ).rejects.toThrow('nope');
+    });
+
+    expect(mockedApplyChange).not.toHaveBeenCalled();
   });
 });
 
 describe('useCreateGenre', () => {
-  it('creates and invalidates the genres, books and series caches', async () => {
+  it('creates and reports genreChanged', async () => {
     mockedGenres.createGenre.mockResolvedValue(publicGenre(5, 'Romance'));
     const client = createTestQueryClient();
-    const invalidate = jest.spyOn(client, 'invalidateQueries');
 
     const { result } = renderHook(() => useCreateGenre(), {
       wrapper: wrapper(client),
@@ -133,17 +149,32 @@ describe('useCreateGenre', () => {
     // Exactly one argument: a mutationFn passed by reference would also get
     // TanStack's internal context object.
     expect(mockedGenres.createGenre).toHaveBeenCalledWith({ name: 'Romance' });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['genres'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['series'] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'genreChanged',
+    });
+  });
+
+  it('reports nothing when the create fails', async () => {
+    mockedGenres.createGenre.mockRejectedValue(new Error('nope'));
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => useCreateGenre(), {
+      wrapper: wrapper(client),
+    });
+
+    await act(async () => {
+      await expect(
+        result.current.mutateAsync({ name: 'Romance' })
+      ).rejects.toThrow('nope');
+    });
+
+    expect(mockedApplyChange).not.toHaveBeenCalled();
   });
 });
 
 describe('useDeleteGenre', () => {
-  it('deletes the id it is given and invalidates all three caches', async () => {
+  it('deletes the id it is given and reports genreChanged', async () => {
     mockedGenres.deleteGenre.mockResolvedValue(undefined);
     const client = createTestQueryClient();
-    const invalidate = jest.spyOn(client, 'invalidateQueries');
 
     const { result } = renderHook(() => useDeleteGenre(), {
       wrapper: wrapper(client),
@@ -152,8 +183,22 @@ describe('useDeleteGenre', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockedGenres.deleteGenre).toHaveBeenCalledWith(1);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['genres'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['series'] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'genreChanged',
+    });
+  });
+
+  it('reports nothing when the delete fails', async () => {
+    mockedGenres.deleteGenre.mockRejectedValue(new Error('nope'));
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => useDeleteGenre(), {
+      wrapper: wrapper(client),
+    });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync(1)).rejects.toThrow('nope');
+    });
+
+    expect(mockedApplyChange).not.toHaveBeenCalled();
   });
 });

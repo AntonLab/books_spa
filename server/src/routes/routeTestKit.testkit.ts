@@ -34,6 +34,25 @@ export function createUnusedRepository<T>(name: string): T {
   ) as T;
 }
 
+// An unused repository that still answers the co-author guard's lookup:
+// findCoAuthorIds reads the map, null when the id is absent. Every other
+// method throws, like createUnusedRepository.
+export function lookupOnlyRepository<T>(
+  name: string,
+  coAuthorIds: ReadonlyMap<number, number[]>
+): T {
+  const unused = createUnusedRepository<Record<string, unknown>>(name);
+  return new Proxy(unused, {
+    get: (target, key) =>
+      key === 'findCoAuthorIds'
+        ? async (id: number) => {
+            const ids = coAuthorIds.get(id);
+            return ids ? [...ids] : null;
+          }
+        : target[key as string],
+  }) as T;
+}
+
 // Never refuses: the route specs sign in far more often than the real limits
 // allow. Those limits have their own specs — middleware/authRateLimit.spec.ts,
 // and the rate-limit cases in authRoutes.spec.ts, which pass
@@ -51,6 +70,7 @@ export function unlimitedAuthRateLimits(): AuthRateLimits {
     loginByIp: unlimited(),
     register: unlimited(),
     resetRequest: unlimited(),
+    resetConfirm: unlimited(),
     currentPassword: unlimited(),
     upload: unlimited(),
     write: unlimited(),

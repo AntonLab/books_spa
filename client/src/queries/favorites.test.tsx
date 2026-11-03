@@ -1,12 +1,15 @@
-import { act, waitFor } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import { useRemoveFavorite, useToggleFavorite } from './favorites';
 import { queryKeys } from './keys';
 import { renderHookWithProviders } from '../test/renderWithProviders';
 import { ApiError } from '../api/client';
 import * as favoritesApi from '../api/favorites';
+import { applyChange } from './applyChange';
 
 jest.mock('../api/favorites');
+jest.mock('./applyChange', () => ({ applyChange: jest.fn() }));
 const mockedFavorites = jest.mocked(favoritesApi);
+const mockedApplyChange = jest.mocked(applyChange);
 
 const favorite = {
   id: 5,
@@ -18,15 +21,15 @@ const favorite = {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockedApplyChange.mockResolvedValue(undefined);
 });
 
 describe('useToggleFavorite', () => {
-  it('adds when the viewer holds no Favorite, and refreshes the work and the lists', async () => {
+  it('adds when the viewer holds no Favorite, and reports favoriteToggled with the work key', async () => {
     mockedFavorites.createFavorite.mockResolvedValue(favorite);
     const { result, queryClient } = renderHookWithProviders(() =>
       useToggleFavorite(queryKeys.book(7))
     );
-    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
 
     await act(() =>
       result.current.mutateAsync({ existingId: null, payload: { bookId: 7 } })
@@ -34,15 +37,15 @@ describe('useToggleFavorite', () => {
 
     expect(mockedFavorites.createFavorite).toHaveBeenCalledWith({ bookId: 7 });
     expect(mockedFavorites.deleteFavorite).not.toHaveBeenCalled();
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.book(7) });
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: queryKeys.allFavorites,
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'favoriteToggled',
+      detailKey: ['books', 7],
     });
   });
 
-  it('removes the Favorite the viewer holds', async () => {
+  it('removes the Favorite the viewer holds, and reports favoriteToggled', async () => {
     mockedFavorites.deleteFavorite.mockResolvedValue(undefined);
-    const { result } = renderHookWithProviders(() =>
+    const { result, queryClient } = renderHookWithProviders(() =>
       useToggleFavorite(queryKeys.seriesDetail(12))
     );
 
@@ -52,42 +55,67 @@ describe('useToggleFavorite', () => {
 
     expect(mockedFavorites.deleteFavorite).toHaveBeenCalledWith(5);
     expect(mockedFavorites.createFavorite).not.toHaveBeenCalled();
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'favoriteToggled',
+      detailKey: queryKeys.seriesDetail(12),
+    });
   });
 
-  it('refreshes the work after a refusal too, since a 409 means the page is stale', async () => {
+  it('reports favoriteToggled after a refusal too, since a 409 means the page is stale', async () => {
     mockedFavorites.createFavorite.mockRejectedValue(
       new ApiError(409, 'favorite is already taken')
     );
     const { result, queryClient } = renderHookWithProviders(() =>
       useToggleFavorite(queryKeys.book(7))
     );
-    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
 
-    act(() => {
-      result.current.mutate({ existingId: null, payload: { bookId: 7 } });
+    await act(async () => {
+      await expect(
+        result.current.mutateAsync({
+          existingId: null,
+          payload: { bookId: 7 },
+        })
+      ).rejects.toMatchObject({ status: 409 });
     });
 
-    await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.book(7) })
-    );
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'favoriteToggled',
+      detailKey: ['books', 7],
+    });
   });
 });
 
 describe('useRemoveFavorite', () => {
-  it('removes by the Favorite’s id and refreshes the lists, books and series', async () => {
+  it('removes by the Favorite’s id and reports favoriteRemoved', async () => {
     mockedFavorites.deleteFavorite.mockResolvedValue(undefined);
     const { result, queryClient } = renderHookWithProviders(() =>
       useRemoveFavorite()
     );
-    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
 
     await act(() => result.current.mutateAsync(5));
 
     expect(mockedFavorites.deleteFavorite).toHaveBeenCalledWith(5);
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: queryKeys.allFavorites,
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'favoriteRemoved',
     });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['series'] });
+  });
+
+  it('reports favoriteRemoved after a failed call too', async () => {
+    mockedFavorites.deleteFavorite.mockRejectedValue(
+      new ApiError(404, 'Favorite 5 not found')
+    );
+    const { result, queryClient } = renderHookWithProviders(() =>
+      useRemoveFavorite()
+    );
+
+    await act(async () => {
+      await expect(result.current.mutateAsync(5)).rejects.toMatchObject({
+        status: 404,
+      });
+    });
+
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'favoriteRemoved',
+    });
   });
 });

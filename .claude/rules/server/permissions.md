@@ -27,8 +27,8 @@ paths:
   `requireModerator`.
 - On `create`, `own` and `any` mean the same thing, since a new row is the
   caller's by construction. The create path still checks rows after the matrix:
-  `assertMayAddToSeries` for a book filed into a series, and `assertMayChange`
-  on the book for a chapter.
+  `assertMayAddToSeries` for a book filed into a series, and
+  `guard.assertMayChange` with a `{ book }` ref for a chapter.
 - **Admins moderate; they do not author.** `admin` and `superadmin` get no
   `create` on `books`, `series` or `chapters`, and `update: own` rather than
   `any` on `comments` and `likes`: a Moderator removes, never rewrites.
@@ -75,5 +75,6 @@ paths:
   superadmin's comment.
 - On your own row, a `status` key is 403 even when it changes nothing. A new
   `password` or `email` needs `currentPassword` in the same body (missing 400,
-  wrong 403; guesses are rate limited, see `rate-limits.md`); it is never stored.
+  wrong 403; guesses are rate limited, see `rate-limits.md`); it is never
+  stored.
 - `pending` is the default status and restricts nothing (`CONTEXT.md`).

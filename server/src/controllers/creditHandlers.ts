@@ -4,11 +4,7 @@ import type { Actor } from '../repositories/notificationRepository.ts';
 import { actorOf } from '../repositories/visibility.ts';
 import { NotFoundError } from '../types/errors.ts';
 import type { AddCoAuthorInput } from '../types/params.ts';
-import {
-  assertCoAuthor,
-  assertMayRemoveCredit,
-  type CoAuthorTarget,
-} from './coAuthorGuard.ts';
+import type { CoAuthorGuard, WorkRef } from './coAuthorGuard.ts';
 
 // null when the work is not there, as the repositories report it.
 type CreditChange = (
@@ -18,8 +14,9 @@ type CreditChange = (
 ) => Promise<object | null>;
 
 interface CreditHandlerOptions {
-  target: (id: number) => CoAuthorTarget;
-  module: 'books' | 'series';
+  guard: CoAuthorGuard;
+  // The ref key and what a missing row is called ('Book' | 'Series').
+  kind: 'book' | 'series';
   // The 403 for an account that is not credited on the work.
   refusal: string;
   repository: { addCoAuthor: CreditChange; removeCoAuthor: CreditChange };
@@ -32,22 +29,24 @@ interface CreditHandlerOptions {
 // No try/catch: the Express 5 router inspects the returned promise and calls
 // next(err) itself when it rejects.
 export function creditHandlers({
-  target,
-  module,
+  guard,
+  kind,
   refusal,
   repository,
 }: CreditHandlerOptions) {
+  const resource = kind === 'book' ? 'Book' : 'Series';
+  const refOf = (id: number): WorkRef =>
+    kind === 'book' ? { book: id } : { series: id };
   return {
     // Rides on `× update`, then requires a Co-author: a Moderator's `any`
     // reaches every work but never its byline.
     addCoAuthor: async (req, res) => {
       const { id } = validatedParams<{ id: number }>(req);
       const { userId } = validatedBody<AddCoAuthorInput>(req);
-      const work = target(id);
-      await assertCoAuthor(req, work, refusal);
+      await guard.assertCoAuthor(req, refOf(id), refusal);
 
       const updated = await repository.addCoAuthor(id, userId, actorOf(req));
-      if (!updated) throw new NotFoundError(work.resource, id);
+      if (!updated) throw new NotFoundError(resource, id);
       res.json(updated);
     },
 
@@ -57,11 +56,10 @@ export function creditHandlers({
       const { id, userId } = validatedParams<{ id: number; userId: number }>(
         req
       );
-      const work = target(id);
-      await assertMayRemoveCredit(req, work, module, userId, refusal);
+      await guard.assertMayRemoveCredit(req, refOf(id), userId, refusal);
 
       const updated = await repository.removeCoAuthor(id, userId, actorOf(req));
-      if (!updated) throw new NotFoundError(work.resource, id);
+      if (!updated) throw new NotFoundError(resource, id);
       res.json(updated);
     },
   } satisfies Record<string, RequestHandler>;

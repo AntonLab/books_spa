@@ -135,10 +135,5 @@ export function createFakeChapterRepository(
       const coAuthorIds = chapter ? books.get(chapter.bookId) : undefined;
       return coAuthorIds ? [...coAuthorIds] : null;
     },
-
-    async findBookCoAuthorIds(bookId) {
-      const coAuthorIds = books.get(bookId);
-      return coAuthorIds ? [...coAuthorIds] : null;
-    },
   };
 }

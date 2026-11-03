@@ -11,6 +11,7 @@ import {
   toggleSeriesNotInterested,
   type ListLibraryParams,
 } from '../api/library';
+import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
 
 export const useLibrary = (params: ListLibraryParams, enabled = true) => {
@@ -38,7 +39,6 @@ const useLibraryActions = <V>({
   removeFn,
   onSettled,
 }: LibraryActionFns<V>) => {
-  // Wrapped: useMutation hands mutationFn a second argument.
   const add = useMutation({
     mutationFn: (variables: V) => addFn(variables),
     onSettled,
@@ -68,15 +68,10 @@ export const useBookLibraryActions = () => {
     addFn: addBookToLibrary,
     toggleFn: toggleBookNotInterested,
     removeFn: clearReadingStatus,
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allLibrary }),
-      ]),
+    onSettled: () => applyChange(queryClient, { type: 'bookLibraryChanged' }),
   });
 };
 
-// The Series detail carries viewerLibrary, so it is refetched with the Books.
 export const useSeriesLibraryActions = (seriesId: number) => {
   const queryClient = useQueryClient();
 
@@ -85,21 +80,11 @@ export const useSeriesLibraryActions = (seriesId: number) => {
     toggleFn: () => toggleSeriesNotInterested(seriesId),
     removeFn: () => removeSeriesFromLibrary(seriesId),
     onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.seriesDetail(seriesId),
-        }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allLibrary }),
-      ]),
+      applyChange(queryClient, { type: 'seriesLibraryChanged', id: seriesId }),
   });
 };
 
-// The Chapter page's reading events. Failures stay silent: reading must not be
-// interrupted, and the next event reports again. The answer is a 204, so
-// refetch from the server. opened can lift not_interested to Reading and
-// finished advances it, so refetch the book lists, the Series (viewerLibrary
-// derives from Book statuses) and the Library.
+// The Chapter page's reading events. Failures stay silent: reading must not be interrupted, and the next event reports again. The answer is a 204, so the server is refetched; see applyChange.
 export const useReadingProgressMutation = () => {
   const queryClient = useQueryClient();
 
@@ -109,10 +94,6 @@ export const useReadingProgressMutation = () => {
       payload: ReadingProgressPayload;
     }) => postReadingProgress(variables.bookId, variables.payload),
     onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allSeries }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allLibrary }),
-      ]),
+      applyChange(queryClient, { type: 'readingProgressRecorded' }),
   });
 };

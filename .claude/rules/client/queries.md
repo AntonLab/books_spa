@@ -33,27 +33,24 @@ the Atomic Design levels. Every cache key lives in `keys.ts`.
   `books` then.
 - `useGenresWithBooks` (`?nonEmpty=true`, under the `genres` prefix) feeds the
   header menu and the search form; book forms and `GenreManager` keep
-  `useGenres`. A book write invalidates `genres` too, since a status change
-  moves a Genre in or out of that list.
+  `useGenres`.
 - **Wrap every `mutationFn`; never pass an `src/api/` function straight
   through.** TanStack passes a second context argument, which arrives as a
   stray parameter and fails `toHaveBeenCalledWith` naming
   `{ client, meta, mutationKey }`.
-- **Invalidate every prefix a write can change.** A book write can move a book
-  in or out of any list, so it invalidates the whole `books` prefix; filing a
-  book also changes a series; a Genre rename changes the `genre` embedded in
-  every book and series; an Avatar change touches every embedded `PublicUser`
-  or `AuthorSummary`. A Comment write and a chapter create, save or delete
-  also invalidate `queryKeys.book(bookId)`: the detail carries `commentCount`
-  and `wordCount` for `BookPage`'s Statistics tab. A chapter reorder does not.
+- **Invalidate every prefix a write can change, through `applyChange`
+  (`applyChange.ts`).** Add a `Change` intent there, never an
+  `invalidateQueries` call in a hook. A Comment write and a chapter create,
+  save or delete also invalidate `queryKeys.book(bookId)`: the detail carries
+  `commentCount` and `wordCount` for `BookPage`'s Statistics tab. A chapter
+  reorder does not.
 - `useToggleLike` handles both directions from the `viewerLikeId` the caller
   holds (`null` likes, a number deletes that row) and takes the key to
   invalidate, since a book like and a comment like refresh different things.
 - `useToggleFavorite` mirrors it for Favorites but invalidates in
   `onSettled`, not `onSuccess`: a 409 or 404 means another tab already
   changed the Favorite, and the refetch is what corrects the star. Both it
-  and `useRemoveFavorite` invalidate the `favorites` prefix; a removal also
-  invalidates `books` and `series`, whose details carry `favoriteCount`.
+  and `useRemoveFavorite` invalidate the `favorites` prefix.
 - `useOptimisticReorder` (`reorder.ts`) is the one save-on-drop for both
   orders: it rewrites the cache before the request, restores it on failure
   and refetches either way, so a 409 brings in the row a Co-author changed.

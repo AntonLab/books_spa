@@ -5,11 +5,11 @@ import { SeriesCoverManager } from '@/components/organisms/SeriesCoverManager/Se
 import { DELETE_SERIES_CONFIRM } from '@/constants/deleteWork';
 import { useDeleteSeries } from '@/queries/series';
 import { seriesCapabilities } from '@/types/capabilities';
-import type { SeriesDetail, PublicUser } from '@/types/api';
+import type { SeriesDetail, SessionUser } from '@/types/api';
 
 interface SeriesDetailsExtrasProps {
   series: SeriesDetail;
-  session: PublicUser;
+  session: SessionUser;
   onGone: () => void;
 }
 

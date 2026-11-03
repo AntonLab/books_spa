@@ -2,23 +2,29 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { ApiError } from '../api/client';
+import type { CreateBookPayload, UpdateBookPayload } from 'shared';
 import {
   useBookSearch,
+  useCreateBook,
   useDeleteBook,
   useDeleteBookCover,
   useFavoritedBooks,
   useRecentlyViewedBooks,
   useSortedBooks,
+  useUpdateBook,
   useUploadBookCover,
 } from './books';
+import { applyChange } from './applyChange';
 import { createTestQueryClient } from '../test/queryClient';
 import * as booksApi from '../api/books';
 import { publicBook } from '../test/works';
 import type { PublicBook } from '../types/book';
 
 jest.mock('../api/books');
+jest.mock('./applyChange', () => ({ applyChange: jest.fn() }));
 
 const mockedBooks = jest.mocked(booksApi);
+const mockedApplyChange = jest.mocked(applyChange);
 
 const book = publicBook({
   authors: [
@@ -47,6 +53,7 @@ const wrapper = (client = createTestQueryClient()) => {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockedApplyChange.mockResolvedValue(undefined);
 });
 
 describe('useSortedBooks', () => {
@@ -239,13 +246,12 @@ describe('useBookSearch', () => {
 });
 
 describe('useUploadBookCover', () => {
-  it('uploads and invalidates the books and series caches', async () => {
+  it('uploads and reports a book change', async () => {
     mockedBooks.uploadBookCover.mockResolvedValue({
       ...book,
       coverUrl: '/api/books/1/cover?v=2',
     });
     const client = createTestQueryClient();
-    const invalidate = jest.spyOn(client, 'invalidateQueries');
     const file = new File([new Uint8Array([1])], 'a.webp', {
       type: 'image/webp',
     });
@@ -257,17 +263,16 @@ describe('useUploadBookCover', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockedBooks.uploadBookCover).toHaveBeenCalledWith(1, file);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['series'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['genres'] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'bookChanged',
+    });
   });
 });
 
 describe('useDeleteBookCover', () => {
-  it('deletes and invalidates the books and series caches', async () => {
+  it('deletes and reports a book change', async () => {
     mockedBooks.deleteBookCover.mockResolvedValue(undefined);
     const client = createTestQueryClient();
-    const invalidate = jest.spyOn(client, 'invalidateQueries');
 
     const { result } = renderHook(() => useDeleteBookCover(1), {
       wrapper: wrapper(client),
@@ -276,17 +281,94 @@ describe('useDeleteBookCover', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockedBooks.deleteBookCover).toHaveBeenCalledWith(1);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['series'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['genres'] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'bookChanged',
+    });
+  });
+});
+
+describe('useCreateBook', () => {
+  it('reports a book change', async () => {
+    mockedBooks.createBook.mockResolvedValue(book);
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => useCreateBook(), {
+      wrapper: wrapper(client),
+    });
+
+    result.current.mutate({} as CreateBookPayload);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'bookChanged',
+    });
+  });
+});
+
+describe('useUpdateBook', () => {
+  it('reports a book change', async () => {
+    mockedBooks.updateBook.mockResolvedValue(book);
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => useUpdateBook(1), {
+      wrapper: wrapper(client),
+    });
+
+    result.current.mutate({} as UpdateBookPayload);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'bookChanged',
+    });
+  });
+
+  it('refreshes nothing after a failed update', async () => {
+    mockedBooks.updateBook.mockRejectedValue(new ApiError(409, 'conflict'));
+    const { result } = renderHook(() => useUpdateBook(1), {
+      wrapper: wrapper(),
+    });
+
+    result.current.mutate({} as UpdateBookPayload);
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mockedApplyChange).not.toHaveBeenCalled();
   });
 });
 
 describe('useDeleteBook', () => {
-  it('refreshes the lists after a failed delete too, as the book may be gone already', async () => {
+  it('reports the deleted book', async () => {
+    mockedBooks.deleteBook.mockResolvedValue(undefined);
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => useDeleteBook(7), {
+      wrapper: wrapper(client),
+    });
+
+    result.current.mutate();
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'bookDeleted',
+      id: 7,
+    });
+  });
+
+  it('reports the deleted book when its id is 0', async () => {
+    mockedBooks.deleteBook.mockResolvedValue(undefined);
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => useDeleteBook(0), {
+      wrapper: wrapper(client),
+    });
+
+    result.current.mutate();
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'bookDeleted',
+      id: 0,
+    });
+  });
+
+  it('reports a failed delete too, as the book may be gone already', async () => {
     mockedBooks.deleteBook.mockRejectedValue(new ApiError(404, 'gone'));
     const client = createTestQueryClient();
-    const invalidate = jest.spyOn(client, 'invalidateQueries');
     const { result } = renderHook(() => useDeleteBook(7), {
       wrapper: wrapper(client),
     });
@@ -294,7 +376,9 @@ describe('useDeleteBook', () => {
     result.current.mutate();
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'bookDeleteFailed',
+    });
   });
 });
 

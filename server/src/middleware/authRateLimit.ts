@@ -17,6 +17,8 @@ export const AUTH_RATE_LIMITS = {
   register: { limit: 5, windowMs: ONE_HOUR_MS },
   // Every password-reset request from one address.
   resetRequest: { limit: 5, windowMs: ONE_HOUR_MS },
+  // Every password-reset confirmation from one address.
+  resetConfirm: { limit: 10, windowMs: ONE_HOUR_MS },
   // Wrong or aborted current-password guesses on a user's own password or
   // email change, by user id; a correct one clears it.
   currentPassword: { limit: 5, windowMs: FIFTEEN_MINUTES_MS },
@@ -33,6 +35,7 @@ export interface AuthRateLimits {
   readonly loginByIp: RateLimiter;
   readonly register: RateLimiter;
   readonly resetRequest: RateLimiter;
+  readonly resetConfirm: RateLimiter;
   readonly currentPassword: RateLimiter;
   readonly upload: RateLimiter;
   readonly write: RateLimiter;
@@ -46,6 +49,7 @@ export function createAuthRateLimits(): AuthRateLimits {
     loginByIp: createRateLimiter(AUTH_RATE_LIMITS.loginByIp),
     register: createRateLimiter(AUTH_RATE_LIMITS.register),
     resetRequest: createRateLimiter(AUTH_RATE_LIMITS.resetRequest),
+    resetConfirm: createRateLimiter(AUTH_RATE_LIMITS.resetConfirm),
     currentPassword: createRateLimiter(AUTH_RATE_LIMITS.currentPassword),
     upload: createRateLimiter(AUTH_RATE_LIMITS.upload),
     write: createRateLimiter(AUTH_RATE_LIMITS.write),
@@ -100,8 +104,8 @@ export function refusal(
   return new TooManyRequestsError(retryAfterMs);
 }
 
-// Register and the reset request: every request counts, before validate, so
-// malformed spam spends the budget too.
+// Register, the reset request and the reset confirmation: every request
+// counts, before validate, so malformed spam spends the budget too.
 export function limitEveryRequest(
   limiter: RateLimiter,
   keyOf: (req: Request) => string = addressOf

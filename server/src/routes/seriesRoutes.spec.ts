@@ -921,6 +921,22 @@ test('PUT /api/series/:id/cover answers 404 before 403 for a series that does no
     async (base) => {
       const response = await putCover(base, 999999, await aWebpImage());
       assert.equal(response.status, 404);
+      assert.match((await json<{ error: string }>(response)).error, /^Series /);
+    }
+  );
+});
+
+test('PUT /api/series/:id/cover answers 415 for an unaccepted content type before looking the series up', async () => {
+  await withAuthenticatedApp(
+    { seriesRepository: createFakeRepository() },
+    async (base) => {
+      const response = await putCover(
+        base,
+        999999,
+        'not an image',
+        'text/plain'
+      );
+      assert.equal(response.status, 415);
     }
   );
 });
