@@ -10,6 +10,7 @@ import type {
   SessionRepository,
 } from './repositories/sessionRepository.ts';
 import type { UserRepository } from './repositories/userRepository.ts';
+import { SESSION_TTL_MS } from './sessionCookie.ts';
 import { hashToken } from './tokens.ts';
 import type { RegisterInput } from './types/auth.ts';
 import { AppError, ForbiddenError, UnauthorizedError } from './types/errors.ts';
@@ -66,6 +67,7 @@ function setup(
     status: options.status ?? 'active',
   };
   const opened: string[] = [];
+  const expiries: Date[] = [];
   const replaced: (string | null)[] = [];
   const touched: number[] = [];
   const calls: string[] = [];
@@ -115,16 +117,18 @@ function setup(
       expiresAt: Date
     ): Promise<SessionRecord> {
       opened.push(tokenHash);
+      expiries.push(expiresAt);
       return { id: opened.length, userId, expiresAt };
     },
     async createIfCredentialCurrent(
       userId: number,
       tokenHash: string,
-      _expiresAt: Date,
+      expiresAt: Date,
       verifiedPasswordHash: string,
       replacedTokenHash: string | null
     ): Promise<SessionOpening> {
       replaced.push(replacedTokenHash);
+      expiries.push(expiresAt);
       if (userId !== account.id || account.password !== verifiedPasswordHash) {
         return 'credential-changed';
       }
@@ -148,7 +152,22 @@ function setup(
     },
   });
 
-  return { module, opened, replaced, touched, calls, created, verified };
+  return {
+    module,
+    opened,
+    expiries,
+    replaced,
+    touched,
+    calls,
+    created,
+    verified,
+  };
+}
+
+// The session expiry the fake received is SESSION_TTL_MS from now, within 5 s.
+function assertSessionTtl(expiresAt: Date | undefined, before: number) {
+  const ttl = (expiresAt?.getTime() ?? 0) - before;
+  assert.ok(ttl >= SESSION_TTL_MS && ttl < SESSION_TTL_MS + 5_000);
 }
 
 test('an unknown login spends one verify on a dummy argon2 hash and answers 401', async () => {
@@ -204,7 +223,9 @@ test('a blocked account with a wrong password is 401, never 403', async () => {
 
 test('login returns the user and a token whose hash is the stored session', async () => {
   const s = setup();
+  const before = Date.now();
   const { user, token } = await s.module.login(input, null);
+  assertSessionTtl(s.expiries[0], before);
   assert.equal(user.id, 7);
   assert.deepEqual(s.opened, [hashToken(token)]);
   assert.deepEqual(s.touched, [7]);
@@ -245,10 +266,12 @@ test('a block committed during the verify leaves no session (403)', async () => 
 
 test('register creates an active account with the role as its own argument and opens a session with create()', async () => {
   const s = setup();
+  const before = Date.now();
   const { user, token } = await s.module.register({
     ...registration,
     role: 'author',
   });
+  assertSessionTtl(s.expiries[0], before);
   assert.deepEqual(s.created, [
     { input: { ...registrationWithoutRole, status: 'active' }, role: 'author' },
   ]);
