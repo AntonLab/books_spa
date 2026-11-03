@@ -68,11 +68,7 @@ export const useSeriesBooks = (id: number, enabled: boolean) => {
   });
 };
 
-// Which keys go stale is `applyChange`'s call (applyChange.ts). Only a delete
-// (`deletedId`) refreshes on error: one that fails because the series is
-// already gone (404) or no longer editable (403) leaves the lists stale,
-// whereas a failed update must not refetch the form's own data under the
-// user's edits.
+// Only a delete (deletedId) also applies seriesDeleteFailed on error; see applyChange.
 const useSeriesMutation = <TVariables, TResult>(
   mutationFn: (variables: TVariables) => Promise<TResult>,
   { deletedId }: { deletedId?: number } = {}

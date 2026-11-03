@@ -33,10 +33,7 @@ export const useChapter = (id: number) => {
   });
 };
 
-// What each write refreshes lives in applyChange. A delete skips the deleted
-// chapter's own detail: its page or modal is still mounted and would refetch
-// into a 404. (removeQueries would not help: a mounted observer rebuilds the
-// removed query and fetches it again.)
+// What each write refreshes lives in applyChange.
 const useChapterMutation = <TVariables, TResult>(
   bookId: number,
   mutationFn: (variables: TVariables) => Promise<TResult>,

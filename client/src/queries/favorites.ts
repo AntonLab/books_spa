@@ -32,9 +32,7 @@ export const useToggleFavorite = (invalidates: QueryKey) => {
   });
 };
 
-// The Favorites page's remove. Every book and series detail carries the
-// count and the viewer's Favorite id, so both prefixes go stale with the
-// lists. onSettled for the reason useToggleFavorite gives.
+// The Favorites page's remove. onSettled for the reason useToggleFavorite gives.
 export const useRemoveFavorite = () => {
   const queryClient = useQueryClient();
 

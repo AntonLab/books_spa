@@ -73,7 +73,6 @@ export const useBookLibraryActions = () => {
   });
 };
 
-// The Series detail carries viewerLibrary, so it is refetched with the Books.
 export const useSeriesLibraryActions = (seriesId: number) => {
   const queryClient = useQueryClient();
 
@@ -86,11 +85,7 @@ export const useSeriesLibraryActions = (seriesId: number) => {
   });
 };
 
-// The Chapter page's reading events. Failures stay silent: reading must not be
-// interrupted, and the next event reports again. The answer is a 204, so
-// refetch from the server. opened can lift not_interested to Reading and
-// finished advances it, so refetch the book lists, the Series (viewerLibrary
-// derives from Book statuses) and the Library.
+// The Chapter page's reading events. Failures stay silent: reading must not be interrupted, and the next event reports again. The answer is a 204, so the server is refetched; see applyChange.
 export const useReadingProgressMutation = () => {
   const queryClient = useQueryClient();
 

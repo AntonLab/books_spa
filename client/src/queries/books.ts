@@ -121,10 +121,7 @@ export const useBook = (id: number) => {
   });
 };
 
-// Which keys go stale is `applyChange`'s call (applyChange.ts). Only a delete
-// (`deletedId`) refreshes on error: one that fails because the book is already
-// gone (404) or no longer editable (403) leaves the lists stale, whereas a
-// failed update must not refetch the form's own data under the user's edits.
+// Only a delete (deletedId) also applies bookDeleteFailed on error; see applyChange.
 const useBookMutation = <TVariables, TResult>(
   mutationFn: (variables: TVariables) => Promise<TResult>,
   { deletedId }: { deletedId?: number } = {}
