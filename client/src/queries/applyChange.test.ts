@@ -158,14 +158,22 @@ describe('applyChange', () => {
     expect(stale).not.toContain(j(['favorites', {}]));
   });
 
-  it('seriesLibraryChanged refreshes that series detail, books and library', async () => {
-    const stale = await staleAfter({ type: 'seriesLibraryChanged', id: 7 });
-    expect(stale).toEqual(
-      expect.arrayContaining(s(['series', 7], ['books', {}], ['library', {}]))
-    );
-    expect(stale).not.toContain(j(['series', 8]));
-    expect(stale).not.toContain(j(['genres']));
-  });
+  it.each([
+    [7, 8],
+    [8, 7],
+  ])(
+    'seriesLibraryChanged id %i refreshes that series detail (not %i), books and library',
+    async (id, other) => {
+      const stale = await staleAfter({ type: 'seriesLibraryChanged', id });
+      expect(stale).toEqual(
+        expect.arrayContaining(
+          s(['series', id], ['books', {}], ['library', {}])
+        )
+      );
+      expect(stale).not.toContain(j(['series', other]));
+      expect(stale).not.toContain(j(['genres']));
+    }
+  );
 
   it('readingProgressRecorded refreshes books, series and library', async () => {
     const stale = await staleAfter({ type: 'readingProgressRecorded' });
@@ -268,10 +276,4 @@ describe('applyChange', () => {
       expect(stale).toContain(j(['books', id]));
     }
   );
-
-  it('seriesLibraryChanged invalidates the detail named by id', async () => {
-    const stale = await staleAfter({ type: 'seriesLibraryChanged', id: 8 });
-    expect(stale).toContain(j(['series', 8]));
-    expect(stale).not.toContain(j(['series', 7]));
-  });
 });

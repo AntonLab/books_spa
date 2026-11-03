@@ -65,6 +65,20 @@ describe('useUploadAvatar', () => {
       type: 'accountChanged',
     });
   });
+
+  it('reports nothing when the upload fails', async () => {
+    mockedUsers.uploadAvatar.mockRejectedValue(new Error('nope'));
+    const file = new File([new Uint8Array([1])], 'a.webp', {
+      type: 'image/webp',
+    });
+    const { result } = renderHook(() => useUploadAvatar(7), {
+      wrapper: wrapper(),
+    });
+
+    await expect(result.current.mutateAsync(file)).rejects.toThrow('nope');
+
+    expect(mockedApplyChange).not.toHaveBeenCalled();
+  });
 });
 
 describe('useUpdateAccount', () => {
@@ -145,22 +159,6 @@ describe('useChangePassword', () => {
     await expect(result.current.mutateAsync(input)).rejects.toThrow('nope');
 
     expect(client.getQueryData(queryKeys.session)).toEqual(sessionOf(session));
-  });
-});
-
-describe('useUploadAvatar failure', () => {
-  it('reports nothing when the upload fails', async () => {
-    mockedUsers.uploadAvatar.mockRejectedValue(new Error('nope'));
-    const file = new File([new Uint8Array([1])], 'a.webp', {
-      type: 'image/webp',
-    });
-    const { result } = renderHook(() => useUploadAvatar(7), {
-      wrapper: wrapper(),
-    });
-
-    await expect(result.current.mutateAsync(file)).rejects.toThrow('nope');
-
-    expect(mockedApplyChange).not.toHaveBeenCalled();
   });
 });
 

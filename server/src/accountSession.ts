@@ -146,7 +146,8 @@ export function createAccountSession(deps: AccountSessionDeps): AccountSession {
     // Never rejects: the controller has already sent the 202. Log policy: .claude/rules/server/auth.md.
     requestReset: async (email) => {
       try {
-        // Pinned by accountSession.spec: no account work before the first tick.
+        // One tick later, so the 202 call returns before the lookup starts
+        // (pinned by accountSession.spec).
         await new Promise((resolve) => setImmediate(resolve));
         const user = await deps.userRepository.findByEmail(email);
         if (!user) return;
