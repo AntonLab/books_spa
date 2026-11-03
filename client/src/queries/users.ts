@@ -1,8 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { deleteAvatar, updateUser, uploadAvatar } from '../api/users';
 import type { UpdateUserPayload } from 'shared';
-import { invalidateWorks } from './invalidateWorks';
-import { queryKeys } from './keys';
+import { applyChange } from './applyChange';
 
 // An Account change touches every place an AuthorSummary or a PublicUser is
 // embedded: the session itself, and every books/series/comments list
@@ -20,14 +19,7 @@ const useAccountMutation = <TVariables, TResult>(
     // is: TanStack calls it with a second context argument an api/ function
     // never declared.
     mutationFn: (variables: TVariables) => mutationFn(variables),
-    onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.session }),
-        invalidateWorks(queryClient),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allComments }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allAuthors }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allAccounts }),
-      ]),
+    onSuccess: () => applyChange(queryClient, { type: 'accountChanged' }),
   });
 };
 

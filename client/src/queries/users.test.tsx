@@ -1,6 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { applyChange } from './applyChange';
 import { useChangePassword } from './auth';
 import { queryKeys } from './keys';
 import { useDeleteAvatar, useUpdateAccount, useUploadAvatar } from './users';
@@ -10,7 +11,9 @@ import * as usersApi from '../api/users';
 import type { PublicUser } from '../types/api';
 
 jest.mock('../api/users');
+jest.mock('./applyChange', () => ({ applyChange: jest.fn() }));
 const mockedUsers = jest.mocked(usersApi);
+const mockedApplyChange = jest.mocked(applyChange);
 
 const session: PublicUser = {
   id: 7,
@@ -37,16 +40,16 @@ const wrapper = (client = createTestQueryClient()) => {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockedApplyChange.mockResolvedValue(undefined);
 });
 
 describe('useUploadAvatar', () => {
-  it('uploads and invalidates the session, books, series, comments and authors caches', async () => {
+  it('uploads and reports accountChanged', async () => {
     mockedUsers.uploadAvatar.mockResolvedValue({
       ...session,
       avatarUrl: '/api/users/7/avatar?v=2',
     });
     const client = createTestQueryClient();
-    const invalidate = jest.spyOn(client, 'invalidateQueries');
     const file = new File([new Uint8Array([1])], 'a.webp', {
       type: 'image/webp',
     });
@@ -58,20 +61,16 @@ describe('useUploadAvatar', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockedUsers.uploadAvatar).toHaveBeenCalledWith(7, file);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth', 'me'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['series'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['comments'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['authors'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['accounts'] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'accountChanged',
+    });
   });
 });
 
 describe('useUpdateAccount', () => {
-  it('updates the user and invalidates the session cache', async () => {
+  it('updates the user and reports accountChanged', async () => {
     mockedUsers.updateUser.mockResolvedValue({ ...session, login: 'x' });
     const client = createTestQueryClient();
-    const invalidate = jest.spyOn(client, 'invalidateQueries');
 
     const { result } = renderHook(() => useUpdateAccount(7), {
       wrapper: wrapper(client),
@@ -82,9 +81,23 @@ describe('useUpdateAccount', () => {
     });
 
     expect(mockedUsers.updateUser).toHaveBeenCalledWith(7, { login: 'x' });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth', 'me'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['authors'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['accounts'] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'accountChanged',
+    });
+  });
+
+  it('reports nothing when the update fails', async () => {
+    mockedUsers.updateUser.mockRejectedValue(new Error('nope'));
+    const client = createTestQueryClient();
+
+    const { result } = renderHook(() => useUpdateAccount(7), {
+      wrapper: wrapper(client),
+    });
+    await expect(result.current.mutateAsync({ login: 'x' })).rejects.toThrow(
+      'nope'
+    );
+
+    expect(mockedApplyChange).not.toHaveBeenCalled();
   });
 });
 
@@ -136,10 +149,9 @@ describe('useChangePassword', () => {
 });
 
 describe('useDeleteAvatar', () => {
-  it('deletes and invalidates the same caches', async () => {
+  it('deletes and reports accountChanged', async () => {
     mockedUsers.deleteAvatar.mockResolvedValue(undefined);
     const client = createTestQueryClient();
-    const invalidate = jest.spyOn(client, 'invalidateQueries');
 
     const { result } = renderHook(() => useDeleteAvatar(7), {
       wrapper: wrapper(client),
@@ -148,10 +160,8 @@ describe('useDeleteAvatar', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockedUsers.deleteAvatar).toHaveBeenCalledWith(7);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth', 'me'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['series'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['comments'] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['authors'] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'accountChanged',
+    });
   });
 });

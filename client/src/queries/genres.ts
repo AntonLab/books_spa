@@ -7,7 +7,7 @@ import {
   updateGenre,
 } from '../api/genres';
 import type { GenrePayload, GenreUpdatePayload } from 'shared';
-import { invalidateWorks } from './invalidateWorks';
+import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
 
 // The whole flat list, unpaged: both forms' select reads this entry.
@@ -35,9 +35,9 @@ export const useGenresCounts = () => {
   });
 };
 
-// Every genre write invalidates three prefixes. `genres` is obvious; `books`
-// and `series` go because a rename or a deletion changes the `genre` embedded
-// in every book and series a cached list already holds.
+// A rename or a deletion changes the `genre` embedded in every book and series
+// a cached list already holds, so a genre write refreshes those too
+// (`applyChange` owns the key list).
 const useGenreMutation = <TVariables, TResult>(
   mutationFn: (variables: TVariables) => Promise<TResult>
 ) => {
@@ -47,11 +47,7 @@ const useGenreMutation = <TVariables, TResult>(
     // Wrapped rather than passed straight through: TanStack calls a mutationFn
     // with a second context argument an API function never declared.
     mutationFn: (variables: TVariables) => mutationFn(variables),
-    onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.genres }),
-        invalidateWorks(queryClient),
-      ]),
+    onSuccess: () => applyChange(queryClient, { type: 'genreChanged' }),
   });
 };
 

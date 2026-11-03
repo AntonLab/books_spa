@@ -46,6 +46,10 @@ the Atomic Design levels. Every cache key lives in `keys.ts`.
   or `AuthorSummary`. A Comment write and a chapter create, save or delete
   also invalidate `queryKeys.book(bookId)`: the detail carries `commentCount`
   and `wordCount` for `BookPage`'s Statistics tab. A chapter reorder does not.
+  `applyChange` (`applyChange.ts`) owns which keys a write makes stale for
+  books, series, reading lists, chapters, the library, favorites, accounts and
+  genres; add a `Change` intent there, never an `invalidateQueries` call in a
+  hook.
 - `useToggleLike` handles both directions from the `viewerLikeId` the caller
   holds (`null` likes, a number deletes that row) and takes the key to
   invalidate, since a book like and a comment like refresh different things.
