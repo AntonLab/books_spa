@@ -21,6 +21,7 @@ refuses it. A limited Account is not Blocked.
 | `POST /api/auth/login`                                                   | IP         | 50 per 15 min | failed or aborted attempts                                           |
 | `POST /api/auth/register`                                                | IP         | 5 per hour    | every request                                                        |
 | `POST /api/auth/password-reset/request`                                  | IP         | 5 per hour    | every request                                                        |
+| `POST /api/auth/password-reset/confirm`                                  | IP         | 10 per hour   | every request                                                        |
 | `PATCH /api/users/:id`                                                   | user id    | 5 per 15 min  | wrong or aborted `currentPassword` attempts; a correct one clears it |
 | `PUT` book cover, series cover, user avatar                              | user id    | 20 per 15 min | every request that passes the permission check and `validate`        |
 | `POST/PATCH/DELETE` comments, likes, reports, chapters, reading progress | user id    | 60 per 15 min | every request that passes the permission check and `validate`        |

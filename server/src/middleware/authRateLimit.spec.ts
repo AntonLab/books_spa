@@ -199,12 +199,13 @@ async function assertRefused(
   });
 }
 
-test('the budgets are 10 and 50 failed logins per 15 minutes, 5 registrations and 5 reset requests per hour, 5 currentPassword guesses per 15 minutes, 20 uploads and 60 writes per 15 minutes', () => {
+test('the budgets are 10 and 50 failed logins per 15 minutes, 5 registrations and 5 reset requests and 10 reset confirmations per hour, 5 currentPassword guesses per 15 minutes, 20 uploads and 60 writes per 15 minutes', () => {
   assert.deepEqual(AUTH_RATE_LIMITS, {
     loginByIpAndLogin: { limit: 10, windowMs: FIFTEEN_MINUTES_MS },
     loginByIp: { limit: 50, windowMs: FIFTEEN_MINUTES_MS },
     register: { limit: 5, windowMs: ONE_HOUR_MS },
     resetRequest: { limit: 5, windowMs: ONE_HOUR_MS },
+    resetConfirm: { limit: 10, windowMs: ONE_HOUR_MS },
     currentPassword: { limit: 5, windowMs: FIFTEEN_MINUTES_MS },
     upload: { limit: 20, windowMs: FIFTEEN_MINUTES_MS },
     write: { limit: 60, windowMs: FIFTEEN_MINUTES_MS },

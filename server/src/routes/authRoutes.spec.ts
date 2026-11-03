@@ -1032,6 +1032,27 @@ test('POST /password-reset/request refuses the 6th request from one address with
   }
 });
 
+test('POST /password-reset/confirm refuses the 11th request from one address within the hour, malformed or not', async () => {
+  const { deps } = authDeps();
+  const limits = createAuthRateLimits();
+  try {
+    await withApp({ ...deps, authRateLimits: limits }, async (base) => {
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        assert.equal(
+          (await post(base, 'password-reset/confirm', {})).status,
+          400
+        );
+      }
+
+      const refused = await post(base, 'password-reset/confirm', {});
+      assert.equal(refused.status, 429);
+      assert.match(refused.headers.get('retry-after') ?? '', /^\d+$/);
+    });
+  } finally {
+    limits.stop();
+  }
+});
+
 test('behind one trusted proxy, each client X-Forwarded-For names keeps its own budget', async () => {
   const { deps } = authDeps();
   const limits = createAuthRateLimits();

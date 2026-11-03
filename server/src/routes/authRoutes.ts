@@ -45,6 +45,7 @@ export function createAuthRoutes(deps: RouteDeps): Router {
   );
   router.post(
     '/password-reset/confirm',
+    limitEveryRequest(limits.resetConfirm),
     validate({ body: resetConfirmSchema }),
     controller.confirmReset
   );
