@@ -12,7 +12,9 @@ import type {
 import type { UserRepository } from './repositories/userRepository.ts';
 import { hashToken } from './tokens.ts';
 import type { RegisterInput } from './types/auth.ts';
-import { ForbiddenError, UnauthorizedError } from './types/errors.ts';
+import { AppError, ForbiddenError, UnauthorizedError } from './types/errors.ts';
+import { flushDetached } from './flush.testkit.ts';
+import { recordLogs } from './logger.testkit.ts';
 
 const BASE = 'http://localhost:3000';
 const input = { login: 'Racer', password: 'whatever12345' };
@@ -253,4 +255,135 @@ test('register creates an active account with the role as its own argument and o
   assert.equal(user.id, 7);
   assert.deepEqual(s.opened, [hashToken(token)]);
   assert.deepEqual(s.replaced, []); // createIfCredentialCurrent not used
+});
+
+function resetSetup(
+  events: string[],
+  overrides: {
+    writeFails?: boolean;
+    lookupFails?: boolean;
+    mailFails?: boolean;
+    redeems?: boolean;
+  } = {}
+) {
+  const known = { id: 7, email: 'racer@example.com' };
+  const replaceCalls: { userId: number; tokenHash: string; expiresAt: Date }[] =
+    [];
+  const redeemCalls: { tokenHash: string; password: string }[] = [];
+  const module = createAccountSession({
+    userRepository: {
+      async findByEmail(email: string) {
+        events.push('lookup');
+        // MySQL data errors quote the offending value, the address included
+        if (overrides.lookupFails) {
+          throw new Error(
+            `Incorrect string value for column 'email': '${email}'`
+          );
+        }
+        return email === known.email ? known : null;
+      },
+    } as unknown as UserRepository,
+    sessionRepository: {} as unknown as SessionRepository,
+    passwordResetRepository: {
+      async replaceForUser(userId: number, tokenHash: string, expiresAt: Date) {
+        events.push('replace');
+        replaceCalls.push({ userId, tokenHash, expiresAt });
+        if (overrides.writeFails) throw new Error('write down');
+      },
+      async redeem(tokenHash: string, password: string) {
+        redeemCalls.push({ tokenHash, password });
+        return overrides.redeems ?? false;
+      },
+    } as unknown as PasswordResetRepository,
+    mailDelivery: {
+      async send() {
+        events.push('send');
+        if (overrides.mailFails) throw new Error('smtp down');
+      },
+    },
+    appBaseUrl: BASE,
+    verify: async () => true,
+  });
+  return {
+    module,
+    replaceCalls,
+    redeemCalls,
+    requestReset: module.requestReset,
+  };
+}
+
+test('requestReset does no account work before the first tick', async () => {
+  const events: string[] = [];
+  const p = resetSetup(events).requestReset('racer@example.com');
+  assert.deepEqual(events, []);
+  await p;
+  assert.deepEqual(events, ['lookup', 'replace', 'send']);
+});
+
+test('an unknown address looks up and does no token work', async () => {
+  const events: string[] = [];
+  await resetSetup(events).requestReset('nobody@example.com');
+  assert.deepEqual(events, ['lookup']);
+});
+
+test('the token written expires in one hour (3_600_000 ms, within 5 s)', async () => {
+  const r = resetSetup([]);
+  const before = Date.now();
+  await r.module.requestReset('racer@example.com');
+  const [call] = r.replaceCalls;
+  assert.equal(call?.userId, 7);
+  const ttl = (call?.expiresAt.getTime() ?? 0) - before;
+  assert.ok(ttl >= 3_600_000 && ttl < 3_605_000);
+});
+
+for (const [name, overrides] of [
+  ['a token write', { writeFails: true }],
+  ['a lookup', { lookupFails: true }],
+] as const) {
+  test(`${name} that fails is logged by name only and never rejects`, async (t) => {
+    const lines = recordLogs(t);
+    const events: string[] = [];
+    await resetSetup(events, overrides).requestReset('racer@example.com');
+    assert.equal(events.includes('send'), false);
+    assert.deepEqual(lines, [
+      {
+        level: 'error',
+        message: 'Password reset request failed',
+        meta: { error: 'Error' },
+      },
+    ]);
+    assert.equal(JSON.stringify(lines).includes('racer@example.com'), false);
+  });
+}
+
+test('a rejected mail send is logged once, requestReset still resolves, no address in the line', async (t) => {
+  const lines = recordLogs(t);
+  await resetSetup([], { mailFails: true }).requestReset('racer@example.com');
+  await flushDetached();
+  assert.deepEqual(lines, [
+    {
+      level: 'error',
+      message: 'Password reset mail failed',
+      meta: { userId: 7, error: 'smtp down' },
+    },
+  ]);
+});
+
+test('confirmReset redeems the hash of the token with the new password', async () => {
+  const r = resetSetup([], { redeems: true });
+  await r.module.confirmReset('the-token', 'newpassword123');
+  assert.deepEqual(r.redeemCalls, [
+    { tokenHash: hashToken('the-token'), password: 'newpassword123' },
+  ]);
+});
+
+test('an unknown, expired or used token is one 400 AppError', async () => {
+  const r = resetSetup([], { redeems: false });
+  await assert.rejects(
+    r.module.confirmReset('t', 'newpassword123'),
+    (e: unknown) =>
+      e instanceof AppError &&
+      e.statusCode === 400 &&
+      e.message === 'Reset token is invalid or has expired'
+  );
 });

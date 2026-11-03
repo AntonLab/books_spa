@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { LOGIN_FORBIDDEN_CHARACTER } from 'shared';
 import type { PublicUser } from 'shared';
 import type { MailDelivery } from './delivery/mailDelivery.ts';
+import { passwordResetMail } from './delivery/passwordResetMail.ts';
+import { logger, messageOf } from './logger.ts';
 import { hashPassword } from './password.ts';
 import type { PasswordResetRepository } from './repositories/passwordResetRepository.ts';
 import type { SessionRepository } from './repositories/sessionRepository.ts';
@@ -9,7 +11,7 @@ import type { UserRepository } from './repositories/userRepository.ts';
 import { SESSION_TTL_MS } from './sessionCookie.ts';
 import { createToken, hashToken } from './tokens.ts';
 import type { LoginInput, RegisterInput } from './types/auth.ts';
-import { ForbiddenError, UnauthorizedError } from './types/errors.ts';
+import { AppError, ForbiddenError, UnauthorizedError } from './types/errors.ts';
 
 export type PasswordVerifier = (
   hashed: string,
@@ -40,7 +42,14 @@ export interface AccountSession {
     input: LoginInput,
     previousToken: string | null
   ): Promise<OpenedSession>;
+  // Resolves after the detached chain; never rejects, failures are logged.
+  requestReset(email: string): Promise<void>;
+  confirmReset(token: string, password: string): Promise<void>;
 }
+
+// One hour, far shorter than a session's seven days: a reset link sits in a
+// mailbox, which is a much likelier place to leak from than a cookie jar.
+const RESET_TTL_MS = 60 * 60 * 1000;
 
 // Computed lazily and cached, not hardcoded: hashPassword reads the argon2
 // parameters from NODE_ENV, so tests get the deliberately weak settings and
@@ -132,6 +141,57 @@ export function createAccountSession(deps: AccountSessionDeps): AccountSession {
       // the auth middleware cannot stamp it.
       await deps.userRepository.touchLastSeen(user.id, new Date());
       return { user, token };
+    },
+
+    // The controller sends the 202 before calling this, so awaiting it cannot
+    // delay the response. A failure cannot become a 500 that leaks the same
+    // signal. Log policy: .claude/rules/server/auth.md.
+    requestReset: async (email) => {
+      try {
+        // a tick later, so the 202 call returns before the lookup starts
+        await new Promise((resolve) => setImmediate(resolve));
+        const user = await deps.userRepository.findByEmail(email);
+        if (!user) return;
+
+        // Supersede any outstanding token: two live links for one account
+        // widens the window a stolen one is useful in. The repository does it
+        // under a row lock.
+        const token = createToken();
+        await deps.passwordResetRepository.replaceForUser(
+          user.id,
+          hashToken(token),
+          new Date(Date.now() + RESET_TTL_MS)
+        );
+        const mail = passwordResetMail(deps.appBaseUrl, user.email, token);
+
+        // Not awaited, so a mail failure is logged once by its own catch.
+        void deps.mailDelivery.send(mail).catch((error: unknown) => {
+          logger.error('Password reset mail failed', {
+            userId: user.id,
+            error: messageOf(error),
+          });
+        });
+      } catch (error) {
+        // The error name, not its message: a MySQL data error quotes the
+        // address, and this line must not tie a failure to an account.
+        logger.error('Password reset request failed', {
+          error: error instanceof Error ? error.name : 'unknown',
+        });
+      }
+    },
+
+    confirmReset: async (token, password) => {
+      const redeemed = await deps.passwordResetRepository.redeem(
+        hashToken(token),
+        password
+      );
+      if (!redeemed) {
+        // Unknown, expired and already-used share one message, so the response
+        // never says which. AppError, not ValidationError: its constructor
+        // takes `details`, not a message, and the shape is wrong for a failure
+        // that is not a schema violation.
+        throw new AppError('Reset token is invalid or has expired', 400);
+      }
     },
   };
 }
