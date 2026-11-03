@@ -350,6 +350,22 @@ describe('useDeleteBook', () => {
     });
   });
 
+  it('reports the deleted book when its id is 0', async () => {
+    mockedBooks.deleteBook.mockResolvedValue(undefined);
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => useDeleteBook(0), {
+      wrapper: wrapper(client),
+    });
+
+    result.current.mutate();
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedApplyChange).toHaveBeenCalledWith(client, {
+      type: 'bookDeleted',
+      id: 0,
+    });
+  });
+
   it('reports a failed delete too, as the book may be gone already', async () => {
     mockedBooks.deleteBook.mockRejectedValue(new ApiError(404, 'gone'));
     const client = createTestQueryClient();

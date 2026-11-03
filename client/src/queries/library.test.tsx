@@ -28,7 +28,10 @@ describe('useSeriesLibraryActions', () => {
   ] as const)(
     'reports seriesLibraryChanged for the Series after %s succeeds',
     async (action, apiName) => {
-      mockedLibrary[apiName].mockResolvedValue(undefined as never);
+      mockedLibrary[apiName].mockResolvedValue({
+        inLibrary: false,
+        notInterested: false,
+      });
       const { result, queryClient } = renderHookWithProviders(() =>
         useSeriesLibraryActions(5)
       );
@@ -42,25 +45,32 @@ describe('useSeriesLibraryActions', () => {
     }
   );
 
-  it('reports seriesLibraryChanged even when the write fails', async () => {
-    mockedLibrary.addSeriesToLibrary.mockRejectedValue(
-      new ApiError(404, 'Series 5 not found')
-    );
-    const { result, queryClient } = renderHookWithProviders(() =>
-      useSeriesLibraryActions(5)
-    );
+  it.each([
+    ['add', 'addSeriesToLibrary'],
+    ['toggleNotInterested', 'toggleSeriesNotInterested'],
+    ['remove', 'removeSeriesFromLibrary'],
+  ] as const)(
+    'reports seriesLibraryChanged even when %s fails',
+    async (action, apiName) => {
+      mockedLibrary[apiName].mockRejectedValue(
+        new ApiError(404, 'Series 5 not found')
+      );
+      const { result, queryClient } = renderHookWithProviders(() =>
+        useSeriesLibraryActions(5)
+      );
 
-    await act(async () => {
-      await expect(result.current.add.mutateAsync()).rejects.toMatchObject({
-        status: 404,
+      await act(async () => {
+        await expect(
+          result.current[action].mutateAsync()
+        ).rejects.toMatchObject({ status: 404 });
       });
-    });
 
-    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
-      type: 'seriesLibraryChanged',
-      id: 5,
-    });
-  });
+      expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+        type: 'seriesLibraryChanged',
+        id: 5,
+      });
+    }
+  );
 });
 
 describe('useReadingProgressMutation', () => {
@@ -138,10 +148,12 @@ describe('useBookLibraryActions', () => {
   ] as const)(
     'reports bookLibraryChanged after %s succeeds',
     async (action, apiName) => {
-      mockedLibrary[apiName].mockResolvedValue({
-        bookId: 7,
-        status: null,
-      } as never);
+      if (apiName === 'clearReadingStatus') {
+        // The server answers 204.
+        mockedLibrary.clearReadingStatus.mockResolvedValue(undefined);
+      } else {
+        mockedLibrary[apiName].mockResolvedValue({ bookId: 7, status: null });
+      }
       const { result, queryClient } = renderHookWithProviders(() =>
         useBookLibraryActions()
       );

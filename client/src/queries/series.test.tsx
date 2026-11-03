@@ -2,10 +2,12 @@ import { act, waitFor } from '@testing-library/react';
 import { ApiError } from '../api/client';
 import { useBooksInSeries } from './books';
 import {
+  useAddBookToSeries,
   useCreateSeries,
   useDeleteSeries,
   useDeleteSeriesCover,
   useFavoritedSeries,
+  useRemoveBookFromSeries,
   useReorderSeriesBooks,
   useSeriesList,
   useUpdateSeries,
@@ -13,7 +15,7 @@ import {
 } from './series';
 import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
-import { publicSeries } from '../test/works';
+import { publicBook, publicSeries } from '../test/works';
 import { renderHookWithProviders } from '../test/renderWithProviders';
 import * as booksApi from '../api/books';
 import * as seriesApi from '../api/series';
@@ -108,6 +110,21 @@ describe('useDeleteSeries', () => {
     });
   });
 
+  it('reports the deleted series when its id is 0', async () => {
+    mockedSeries.deleteSeries.mockResolvedValue(undefined);
+    const { result, queryClient } = renderHookWithProviders(() =>
+      useDeleteSeries(0)
+    );
+
+    result.current.mutate();
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'seriesDeleted',
+      id: 0,
+    });
+  });
+
   it('reports a failed delete too', async () => {
     mockedSeries.deleteSeries.mockRejectedValue(new ApiError(404, 'gone'));
     const { result, queryClient } = renderHookWithProviders(() =>
@@ -119,6 +136,38 @@ describe('useDeleteSeries', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
       type: 'seriesDeleteFailed',
+    });
+  });
+});
+
+describe('useAddBookToSeries / useRemoveBookFromSeries', () => {
+  it('reports a series change after adding a book', async () => {
+    mockedBooks.updateBook.mockResolvedValue(publicBook());
+    const { result, queryClient } = renderHookWithProviders(() =>
+      useAddBookToSeries(12)
+    );
+
+    result.current.mutate(3);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedBooks.updateBook).toHaveBeenCalledWith(3, { seriesId: 12 });
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'seriesChanged',
+    });
+  });
+
+  it('reports a series change after removing a book', async () => {
+    mockedSeries.removeBookFromSeries.mockResolvedValue(undefined);
+    const { result, queryClient } = renderHookWithProviders(() =>
+      useRemoveBookFromSeries(12)
+    );
+
+    result.current.mutate(3);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedSeries.removeBookFromSeries).toHaveBeenCalledWith(12, 3);
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'seriesChanged',
     });
   });
 });

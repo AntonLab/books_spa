@@ -97,6 +97,44 @@ describe('chapter writes', () => {
     });
   });
 
+  it('a failed save reports nothing', async () => {
+    mockedChapters.updateChapter.mockRejectedValue(new Error('boom'));
+    const { wrapper } = setUp();
+    const { result } = renderHook(() => useUpdateChapter(1, 9), { wrapper });
+
+    result.current.mutate({ text: 'x', expectedUpdatedAt: 'y' });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mockedApplyChange).not.toHaveBeenCalled();
+  });
+
+  it('a failed create reports nothing', async () => {
+    mockedChapters.createChapter.mockRejectedValue(new Error('boom'));
+    const { wrapper } = setUp();
+    const { result } = renderHook(() => useCreateChapter(1), { wrapper });
+
+    result.current.mutate({
+      bookId: 1,
+      title: 'Chapter One',
+      text: 'x',
+      publishedAt: 'now',
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mockedApplyChange).not.toHaveBeenCalled();
+  });
+
+  it('a failed delete reports nothing', async () => {
+    mockedChapters.deleteChapter.mockRejectedValue(new Error('boom'));
+    const { wrapper } = setUp();
+    const { result } = renderHook(() => useDeleteChapter(1, 9), { wrapper });
+
+    result.current.mutate(undefined);
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mockedApplyChange).not.toHaveBeenCalled();
+  });
+
   it('deleting a chapter reports a chapterDeleted with the book and chapter ids', async () => {
     const { client, wrapper } = setUp();
     const { result } = renderHook(() => useDeleteChapter(1, 9), { wrapper });

@@ -153,6 +153,22 @@ describe('useCreateGenre', () => {
       type: 'genreChanged',
     });
   });
+
+  it('reports nothing when the create fails', async () => {
+    mockedGenres.createGenre.mockRejectedValue(new Error('nope'));
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => useCreateGenre(), {
+      wrapper: wrapper(client),
+    });
+
+    await act(async () => {
+      await expect(
+        result.current.mutateAsync({ name: 'Romance' })
+      ).rejects.toThrow('nope');
+    });
+
+    expect(mockedApplyChange).not.toHaveBeenCalled();
+  });
 });
 
 describe('useDeleteGenre', () => {

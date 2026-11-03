@@ -148,6 +148,22 @@ describe('useChangePassword', () => {
   });
 });
 
+describe('useUploadAvatar failure', () => {
+  it('reports nothing when the upload fails', async () => {
+    mockedUsers.uploadAvatar.mockRejectedValue(new Error('nope'));
+    const file = new File([new Uint8Array([1])], 'a.webp', {
+      type: 'image/webp',
+    });
+    const { result } = renderHook(() => useUploadAvatar(7), {
+      wrapper: wrapper(),
+    });
+
+    await expect(result.current.mutateAsync(file)).rejects.toThrow('nope');
+
+    expect(mockedApplyChange).not.toHaveBeenCalled();
+  });
+});
+
 describe('useDeleteAvatar', () => {
   it('deletes and reports accountChanged', async () => {
     mockedUsers.deleteAvatar.mockResolvedValue(undefined);
@@ -163,5 +179,16 @@ describe('useDeleteAvatar', () => {
     expect(mockedApplyChange).toHaveBeenCalledWith(client, {
       type: 'accountChanged',
     });
+  });
+
+  it('reports nothing when the delete fails', async () => {
+    mockedUsers.deleteAvatar.mockRejectedValue(new Error('nope'));
+    const { result } = renderHook(() => useDeleteAvatar(7), {
+      wrapper: wrapper(),
+    });
+
+    await expect(result.current.mutateAsync()).rejects.toThrow('nope');
+
+    expect(mockedApplyChange).not.toHaveBeenCalled();
   });
 });
