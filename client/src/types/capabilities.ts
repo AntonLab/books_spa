@@ -5,9 +5,6 @@ import type { SessionUser } from './api';
 // What the viewer may do with a Book or Series, so a page shows only what the
 // server would allow. The rules live in shared/src/workAccess.ts; these
 // wrappers only pick the fields each kind of page uses.
-//
-// isCoAuthor alone gates what a Moderator never does: the byline and adding
-// chapters (the matrix gives Moderators no create).
 
 type Session = SessionUser | null | undefined;
 

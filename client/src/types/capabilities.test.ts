@@ -6,24 +6,18 @@ import {
   readingListCapabilities,
   seriesCapabilities,
 } from './capabilities';
-import { sessionOf } from '@/test/session';
+import { sessionOf, userOf } from '@/test/session';
 import type { PublicUser, SessionUser } from './api';
 
 const account = (id: number, role: PublicUser['role']): SessionUser =>
-  sessionOf({
-    id,
-    login: `account${id}`,
-    email: `account${id}@example.com`,
-    firstName: 'Test',
-    lastName: 'Account',
-    role,
-    status: 'active',
-    avatarUrl: null,
-    about: '',
-    showLastSeen: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  });
+  sessionOf(
+    userOf({
+      id,
+      login: `account${id}`,
+      email: `account${id}@example.com`,
+      role,
+    })
+  );
 
 const COAUTHOR = account(1, 'author');
 const STRANGER = account(2, 'author');

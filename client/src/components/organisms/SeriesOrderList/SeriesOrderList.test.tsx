@@ -7,7 +7,7 @@ import { ApiError } from '@/api/client';
 import * as seriesApi from '@/api/series';
 import * as booksApi from '@/api/books';
 import { waitPastDebounce } from '@/test/waitPastDebounce';
-import { sessionOf } from '@/test/session';
+import { sessionOf, userOf } from '@/test/session';
 import type { PublicUser, SeriesBookSummary, SessionUser } from '@/types/api';
 import type { PublicBook } from '@/types/book';
 
@@ -35,16 +35,7 @@ const cora = {
 };
 
 const sessionFor = (role: PublicUser['role']): SessionUser =>
-  sessionOf({
-    ...ann,
-    email: 'ann@example.com',
-    role,
-    status: 'active',
-    about: '',
-    showLastSeen: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  });
+  sessionOf(userOf({ ...ann, email: 'ann@example.com', role }));
 
 const bookNamed = (
   id: number,

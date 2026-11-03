@@ -29,6 +29,22 @@ export const permissionsOf = (
   return permissions;
 };
 
+export const userOf = (overrides: Partial<PublicUser> = {}): PublicUser => ({
+  id: 1,
+  login: 'account1',
+  email: 'account1@example.com',
+  firstName: 'Test',
+  lastName: 'Account',
+  role: 'user',
+  status: 'active',
+  avatarUrl: null,
+  about: '',
+  showLastSeen: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  ...overrides,
+});
+
 export const sessionOf = (
   user: PublicUser,
   usersUpdate?: PermissionScope

@@ -55,7 +55,7 @@ export const workAccess = (
     mayRead: !isDraft || mayEdit,
     // The server keeps a Draft's Favorites but counts and lists none of
     // them, so a star on a Draft would show a count that means nothing.
-    // Not for a Co-author either, and a Series has no status to be a Draft.
+    // Not for a Co-author either.
     mayFavorite: mayHoldAsReader && !isDraft,
     mayKeepInLibrary: mayHoldAsReader,
   };
