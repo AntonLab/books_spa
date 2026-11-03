@@ -104,8 +104,8 @@ export function refusal(
   return new TooManyRequestsError(retryAfterMs);
 }
 
-// Register, the reset request and the reset confirmation: every request counts, before validate, so
-// malformed spam spends the budget too.
+// Register, the reset request and the reset confirmation: every request
+// counts, before validate, so malformed spam spends the budget too.
 export function limitEveryRequest(
   limiter: RateLimiter,
   keyOf: (req: Request) => string = addressOf
