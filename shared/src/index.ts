@@ -23,3 +23,4 @@ export * from './series.ts';
 export * from './user.ts';
 export * from './wire.ts';
 export * from './work.ts';
+export * from './workAccess.ts';
