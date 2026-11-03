@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import { createAccountSession } from '../accountSession.ts';
 import { createAuthController } from '../controllers/authController.ts';
+import { verifyPassword } from '../password.ts';
 import {
   limitEveryRequest,
   limitFailedLogins,
@@ -15,7 +17,11 @@ import {
 import type { RouteDeps } from './index.ts';
 
 export function createAuthRoutes(deps: RouteDeps): Router {
-  const controller = createAuthController(deps);
+  const controller = createAuthController({
+    userRepository: deps.userRepository,
+    sessionRepository: deps.sessionRepository,
+    accountSession: createAccountSession({ ...deps, verify: verifyPassword }),
+  });
   const requireAuth = createRequireAuth(deps);
   const limits = deps.authRateLimits;
   const router = Router();

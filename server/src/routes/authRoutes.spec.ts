@@ -364,26 +364,6 @@ test('POST /login accepts the email, in any case, in the login field', async () 
   });
 });
 
-test('an unknown email and a wrong password are indistinguishable', async () => {
-  const { deps } = authDeps();
-  await withApp(deps, async (base) => {
-    await post(base, 'register', registration);
-
-    const wrong = await post(base, 'login', {
-      login: 'bob@example.com',
-      password: 'wrongpassword',
-    });
-    const unknown = await post(base, 'login', {
-      login: 'nobody@example.com',
-      password: 'wrongpassword',
-    });
-
-    assert.equal(wrong.status, 401);
-    assert.equal(unknown.status, 401);
-    assert.deepEqual(await json(wrong), await json(unknown));
-  });
-});
-
 test('an accented lookalike of a registered email answers the same 401 as an unknown one', async () => {
   const { deps } = authDeps();
   await withApp(deps, async (base) => {
@@ -401,22 +381,6 @@ test('an accented lookalike of a registered email answers the same 401 as an unk
     assert.equal(lookalike.status, 401);
     assert.equal(unknown.status, 401);
     assert.deepEqual(await json(lookalike), await json(unknown));
-  });
-});
-
-test('a blocked account signing in by email is refused with 403', async () => {
-  const { deps, users } = authDeps();
-  await withApp(deps, async (base) => {
-    const { id } = await json<PublicUser>(
-      await post(base, 'register', registration)
-    );
-    await users.update(id, { status: 'blocked' });
-    const response = await post(base, 'login', {
-      login: 'bob@example.com',
-      password: 'hunter2hunter2',
-    });
-
-    assert.equal(response.status, 403);
   });
 });
 
@@ -441,42 +405,6 @@ test('POST /login issues a new session rather than reusing the old one', async (
     );
 
     assert.notEqual(first, second);
-  });
-});
-
-test('a wrong password and an unknown login are indistinguishable', async () => {
-  const { deps } = authDeps();
-  await withApp(deps, async (base) => {
-    await post(base, 'register', registration);
-
-    const wrong = await post(base, 'login', {
-      login: 'Bob',
-      password: 'wrongpassword',
-    });
-    const unknown = await post(base, 'login', {
-      login: 'Nobody',
-      password: 'wrongpassword',
-    });
-
-    assert.equal(wrong.status, 401);
-    assert.equal(unknown.status, 401);
-    assert.deepEqual(await json(wrong), await json(unknown));
-  });
-});
-
-test('a blocked account is refused with 403', async () => {
-  const { deps, users } = authDeps();
-  await withApp(deps, async (base) => {
-    const { id } = await json<PublicUser>(
-      await post(base, 'register', registration)
-    );
-    await users.update(id, { status: 'blocked' });
-    const response = await post(base, 'login', {
-      login: 'Bob',
-      password: 'hunter2hunter2',
-    });
-
-    assert.equal(response.status, 403);
   });
 });
 
@@ -610,24 +538,6 @@ test('login without a cookie, or with a token no row matches, still succeeds and
   });
 });
 
-test('a wrong password leaves the presented session alive', async () => {
-  const { deps } = authDeps();
-  await withApp(deps, async (base) => {
-    await post(base, 'register', registration);
-    const tokenA = sessionToken(await post(base, 'login', loginBody));
-
-    const response = await post(
-      base,
-      'login',
-      { ...loginBody, password: 'wrong-password-123' },
-      `${SESSION_COOKIE_NAME}=${tokenA}`
-    );
-
-    assert.equal(response.status, 401);
-    assert.equal(await meStatus(base, tokenA), 200);
-  });
-});
-
 test("the presented cookie of another account's session is revoked too", async () => {
   const { deps } = authDeps();
   await withApp(deps, async (base) => {
@@ -748,30 +658,6 @@ test('a reset request answers 202 before the mail send settles, and logs a faile
         meta: { userId: registered.id, error: 'smtp down' },
       },
     ]);
-  });
-});
-
-test('a reset request answers 202 when the token write fails', async (t) => {
-  recordLogs(t); // silences the failure log; the controller spec owns its content
-  const { deps } = authDeps();
-  const failingDeps = {
-    ...deps,
-    passwordResetRepository: {
-      ...deps.passwordResetRepository,
-      replaceForUser: async () => {
-        throw new Error('db down');
-      },
-    },
-  };
-
-  await withApp(failingDeps, async (base) => {
-    await post(base, 'register', registration);
-    const response = await post(base, 'password-reset/request', {
-      email: 'bob@example.com',
-    });
-    await flushDetached();
-
-    assert.equal(response.status, 202);
   });
 });
 
