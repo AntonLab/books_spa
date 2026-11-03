@@ -2,28 +2,35 @@ import { act, waitFor } from '@testing-library/react';
 import { ApiError } from '../api/client';
 import { useBooksInSeries } from './books';
 import {
+  useCreateSeries,
   useDeleteSeries,
   useDeleteSeriesCover,
   useFavoritedSeries,
   useReorderSeriesBooks,
   useSeriesList,
+  useUpdateSeries,
   useUploadSeriesCover,
 } from './series';
+import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
 import { publicSeries } from '../test/works';
 import { renderHookWithProviders } from '../test/renderWithProviders';
 import * as booksApi from '../api/books';
 import * as seriesApi from '../api/series';
+import type { SeriesPayload } from 'shared';
 
 jest.mock('../api/series');
 jest.mock('../api/books');
+jest.mock('./applyChange', () => ({ applyChange: jest.fn() }));
 const mockedSeries = jest.mocked(seriesApi);
 const mockedBooks = jest.mocked(booksApi);
+const mockedApplyChange = jest.mocked(applyChange);
 
 const body = { items: [], total: 0, limit: 20, offset: 0 };
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockedApplyChange.mockResolvedValue(undefined);
 });
 
 describe('useSeriesList', () => {
@@ -43,19 +50,76 @@ describe('useSeriesList', () => {
   });
 });
 
-describe('useDeleteSeries', () => {
-  it('refreshes the lists after a failed delete too', async () => {
-    mockedSeries.deleteSeries.mockRejectedValue(new ApiError(404, 'gone'));
+describe('useCreateSeries', () => {
+  it('reports a series change', async () => {
+    mockedSeries.createSeries.mockResolvedValue(publicSeries());
+    const { result, queryClient } = renderHookWithProviders(() =>
+      useCreateSeries()
+    );
 
+    result.current.mutate({ title: 'S' } as SeriesPayload);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'seriesChanged',
+    });
+  });
+});
+
+describe('useUpdateSeries', () => {
+  it('reports a series change', async () => {
+    mockedSeries.updateSeries.mockResolvedValue(publicSeries());
+    const { result, queryClient } = renderHookWithProviders(() =>
+      useUpdateSeries(12)
+    );
+
+    result.current.mutate({ title: 'S' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'seriesChanged',
+    });
+  });
+
+  it('refreshes nothing after a failed update', async () => {
+    mockedSeries.updateSeries.mockRejectedValue(new ApiError(409, 'conflict'));
+    const { result } = renderHookWithProviders(() => useUpdateSeries(12));
+
+    result.current.mutate({ title: 'S' });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mockedApplyChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('useDeleteSeries', () => {
+  it('reports the deleted series', async () => {
+    mockedSeries.deleteSeries.mockResolvedValue(undefined);
     const { result, queryClient } = renderHookWithProviders(() =>
       useDeleteSeries(12)
     );
-    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+
+    result.current.mutate();
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'seriesDeleted',
+      id: 12,
+    });
+  });
+
+  it('reports a failed delete too', async () => {
+    mockedSeries.deleteSeries.mockRejectedValue(new ApiError(404, 'gone'));
+    const { result, queryClient } = renderHookWithProviders(() =>
+      useDeleteSeries(12)
+    );
 
     result.current.mutate();
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['series'] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'seriesDeleteFailed',
+    });
   });
 });
 
@@ -141,12 +205,11 @@ describe('useFavoritedSeries', () => {
 });
 
 describe('useUploadSeriesCover / useDeleteSeriesCover', () => {
-  it('upload calls the API and invalidates the series and books caches', async () => {
+  it('upload calls the API and reports a series change', async () => {
     mockedSeries.uploadSeriesCover.mockResolvedValue(publicSeries());
     const { result, queryClient } = renderHookWithProviders(() =>
       useUploadSeriesCover(12)
     );
-    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
     const file = new File([new Uint8Array([1])], 'a.webp', {
       type: 'image/webp',
     });
@@ -155,26 +218,23 @@ describe('useUploadSeriesCover / useDeleteSeriesCover', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockedSeries.uploadSeriesCover).toHaveBeenCalledWith(12, file);
-    expect(invalidate).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ['series'] })
-    );
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'seriesChanged',
+    });
   });
 
-  it('delete calls the API and invalidates the same caches', async () => {
+  it('delete calls the API and reports a series change', async () => {
     mockedSeries.deleteSeriesCover.mockResolvedValue(undefined);
     const { result, queryClient } = renderHookWithProviders(() =>
       useDeleteSeriesCover(12)
     );
-    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
 
     result.current.mutate();
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockedSeries.deleteSeriesCover).toHaveBeenCalledWith(12);
-    expect(invalidate).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ['series'] })
-    );
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] });
+    expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+      type: 'seriesChanged',
+    });
   });
 });
