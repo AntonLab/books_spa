@@ -35,7 +35,8 @@ export function creditHandlers({
   repository,
 }: CreditHandlerOptions) {
   const resource = kind === 'book' ? 'Book' : 'Series';
-  const refOf = (id: number) => ({ [kind]: id }) as WorkRef;
+  const refOf = (id: number): WorkRef =>
+    kind === 'book' ? { book: id } : { series: id };
   return {
     // Rides on `× update`, then requires a Co-author: a Moderator's `any`
     // reaches every work but never its byline.

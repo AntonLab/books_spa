@@ -26,7 +26,8 @@ Notifications, comment tombstones).
   lookup: the guard does the 404, then the 403.
   `assertMayChange` (a Co-author, or `any` once the row exists) is for edits and
   orders, `assertCoAuthor` (a Co-author, whatever the scope) for the byline,
-  `assertMayRemoveCredit` for taking a credit off a work. Comments and likes (`assertOwner` / `assertOwned`) compare a single owner.
+  `assertMayRemoveCredit` for taking a credit off a work. Comments and likes
+  (`assertOwner` / `assertOwned`) compare a single owner.
 - A book's or series' `own` means one of its Co-authors (`findCoAuthorIds`).
   Chapters have no owner column and resolve through their book; a chapter
   create and reorder check the book, since there is no chapter to own.

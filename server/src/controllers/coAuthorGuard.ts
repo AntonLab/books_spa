@@ -70,10 +70,14 @@ export function createCoAuthorGuard(deps: {
       resource = 'Chapter';
       id = ref.chapter;
       coAuthorIds = await deps.chapterRepository.findCoAuthorIds(id);
-    } else {
+    } else if ('illustration' in ref) {
       resource = 'Illustration';
       id = ref.illustration;
       coAuthorIds = await deps.illustrationRepository.findCoAuthorIds(id);
+    } else {
+      // A new CoAuthorRef kind fails to compile here until it has a branch.
+      const unhandled: never = ref;
+      return unhandled;
     }
     if (coAuthorIds === null) throw new NotFoundError(resource, id);
     return coAuthorIds;
