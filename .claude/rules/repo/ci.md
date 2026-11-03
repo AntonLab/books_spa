@@ -11,7 +11,7 @@ merges into. Both run the same automation.
 
 - `workflows/ci.yml` — on every PR into and push to `dev` or `main`, plus
   `workflow_dispatch`: five parallel jobs on `ubuntu-latest` with Node from
-  `.nvmrc` — `lint` (`lint`, `format:check`, `test:scripts`, a
+  `.nvmrc` — `lint` (`lint`, `format:check`, `test:scripts`, `npm test -w shared`, a
   `node --check` pass over `scripts/*.mjs` and
   `npm audit --omit=dev --audit-level=critical`), `typecheck`, `test-client`,
   `test-server`, `build`. A new check that needs no service or separate runner
