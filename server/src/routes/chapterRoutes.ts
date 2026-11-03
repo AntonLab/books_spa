@@ -30,7 +30,8 @@ export function createChapterRoutes(deps: RouteDeps): Router {
   const guard = createCoAuthorGuard(deps);
   const controller = createChapterController(deps.chapterRepository, guard);
   const illustrations = createIllustrationController(
-    deps.illustrationRepository
+    deps.illustrationRepository,
+    guard
   );
   const requirePermission = createRequirePermission(deps);
   const limitWrites = limitUserWrites(deps);

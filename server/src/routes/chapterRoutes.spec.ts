@@ -739,36 +739,112 @@ const uploadGarbage = (base: string) =>
     body: 'not an image',
   });
 
+const ILLUSTRATION_ID = 7;
+const CHAPTER_CO_AUTHORS = new Map<number, number[]>([[1, [USER_IDS.author]]]);
+const ILLUSTRATION_CO_AUTHORS = new Map<number, number[]>([
+  [ILLUSTRATION_ID, [USER_IDS.author]],
+]);
+
 const illustrationRepositoryWith = (
   full: boolean
 ): AppDeps['illustrationRepository'] =>
   ({
-    async findChapterCoAuthorIds() {
-      return [USER_IDS.author];
+    async findCoAuthorIds(id: number) {
+      return ILLUSTRATION_CO_AUTHORS.get(id) ?? null;
     },
     async isFull() {
       return full;
     },
   }) as unknown as AppDeps['illustrationRepository'];
 
-test('an upload past the illustration cap is refused with a 409 before the image is decoded', () =>
-  withAuthenticatedApp(
-    { illustrationRepository: illustrationRepositoryWith(true) },
-    async (base) => {
-      const response = await uploadGarbage(base);
+const illustrationDeps = (full: boolean) => ({
+  illustrationRepository: illustrationRepositoryWith(full),
+  chapterRepository: lookupOnlyRepository<ChapterRepository>(
+    'chapter',
+    CHAPTER_CO_AUTHORS
+  ),
+});
 
-      assert.equal(response.status, 409);
+const uploadTo = (base: string, chapterId: number, cookie: string) =>
+  fetch(`${base}/api/chapters/${chapterId}/illustrations`, {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain', cookie },
+    body: 'not an image',
+  });
+
+test('an uncredited author is refused an upload with a 403, before the media type and the cap', () =>
+  withAuthenticatedApp(illustrationDeps(true), async (base) => {
+    const response = await uploadTo(base, 1, ROLE_COOKIES.otherAuthor);
+
+    assert.equal(response.status, 403);
+  }));
+
+test('a credited author gets 415 for a non-image body, then 409 on a full chapter', () =>
+  withAuthenticatedApp(illustrationDeps(true), async (base) => {
+    assert.equal((await uploadTo(base, 1, ROLE_COOKIES.author)).status, 415);
+    assert.equal((await uploadGarbage(base)).status, 409);
+  }));
+
+test('an upload to a missing chapter is a 404 naming the chapter', () =>
+  withAuthenticatedApp(illustrationDeps(false), async (base) => {
+    const response = await uploadTo(base, 999, ROLE_COOKIES.author);
+
+    assert.equal(response.status, 404);
+    assert.match((await json<{ error: string }>(response)).error, /Chapter/);
+  }));
+
+test('PATCH and DELETE of an illustration: missing is 404, uncredited is 403', () =>
+  withAuthenticatedApp(illustrationDeps(false), async (base) => {
+    for (const method of ['PATCH', 'DELETE']) {
+      const call = (id: number, cookie: string) =>
+        fetch(`${base}/api/illustrations/${id}`, {
+          method,
+          headers: { 'content-type': 'application/json', cookie },
+          body: method === 'PATCH' ? JSON.stringify({ caption: 'x' }) : null,
+        });
+
+      const missing = await call(999, ROLE_COOKIES.author);
+      assert.equal(missing.status, 404, method);
       assert.match(
-        (await json<{ error: string }>(response)).error,
-        /at most 20 illustrations/
+        (await json<{ error: string }>(missing)).error,
+        /Illustration/
+      );
+
+      const uncredited = await call(ILLUSTRATION_ID, ROLE_COOKIES.otherAuthor);
+      assert.equal(uncredited.status, 403, method);
+      assert.match(
+        (await json<{ error: string }>(uncredited)).error,
+        /co-author/
       );
     }
-  ));
+  }));
+
+test('PUT illustration-order by an uncredited author is a 403', () =>
+  withAuthenticatedApp(illustrationDeps(false), async (base) => {
+    const response = await fetch(`${base}/api/chapters/1/illustration-order`, {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        cookie: ROLE_COOKIES.otherAuthor,
+      },
+      body: JSON.stringify({ illustrationIds: [1] }),
+    });
+
+    assert.equal(response.status, 403);
+  }));
+
+test('an upload past the illustration cap is refused with a 409 before the image is decoded', () =>
+  withAuthenticatedApp(illustrationDeps(true), async (base) => {
+    const response = await uploadGarbage(base);
+
+    assert.equal(response.status, 409);
+    assert.match(
+      (await json<{ error: string }>(response)).error,
+      /at most 20 illustrations/
+    );
+  }));
 
 test('an upload under the illustration cap is decoded', () =>
-  withAuthenticatedApp(
-    { illustrationRepository: illustrationRepositoryWith(false) },
-    async (base) => {
-      assert.equal((await uploadGarbage(base)).status, 400);
-    }
-  ));
+  withAuthenticatedApp(illustrationDeps(false), async (base) => {
+    assert.equal((await uploadGarbage(base)).status, 400);
+  }));
