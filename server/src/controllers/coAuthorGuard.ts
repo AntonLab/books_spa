@@ -109,13 +109,12 @@ export function createCoAuthorGuard(deps: {
     },
 
     // Taking a credit off a work. The route sits behind requireAuth alone, so
-    // a Co-author who switched Role to `user` (`none` on the module) can still
-    // leave; that is why the matrix is read here rather than stamped by
-    // requirePermission. Leaving needs no check: the repository answers 404
-    // for an uncredited account and 409 for the last Co-author. Removing
-    // someone else takes exactly `own` — `none` is no longer an author and
-    // `any` is a Moderator, who never changes a byline (ADR-0005) — and a
-    // credit.
+    // no scope is stamped. The matrix is read here, so a Co-author who switched
+    // to Role `user` (`none` on the module) can still leave. Leaving needs no
+    // check: the repository answers 404 for an uncredited account and 409 for
+    // the last Co-author. Removing someone else needs scope exactly `own`
+    // (`none` is no longer an author; `any` is a Moderator, who never changes a
+    // byline, ADR-0005) and a credit on the work.
     assertMayRemoveCredit: async (req, ref, userId, refusal) => {
       if (!req.user) throw new UnauthorizedError();
       if (userId === req.user.id) return;

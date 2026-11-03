@@ -21,9 +21,8 @@ Notifications, comment tombstones).
   404 before 403.
 - Books, series, chapters and illustrations share one rule,
   `createCoAuthorGuard` in `controllers/coAuthorGuard.ts`. It is built from the
-  four repositories, and its methods take a resource ref (`{ book }`,
-  `{ series }`, `{ chapter }`, `{ illustration }`), so a caller cannot skip the
-  lookup: the guard does the 404, then the 403.
+  four repositories. Its methods take a ref (`{ book }`, `{ series }`,
+  `{ chapter }`, `{ illustration }`) and do the 404, then the 403.
   `assertMayChange` (a Co-author, or `any` once the row exists) is for edits and
   orders, `assertCoAuthor` (a Co-author, whatever the scope) for the byline,
   `assertMayRemoveCredit` for taking a credit off a work. Comments and likes

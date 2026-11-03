@@ -29,9 +29,6 @@ export function createBookController(
   repository: BookRepository,
   guard: CoAuthorGuard
 ) {
-  // Row-level checks go through coAuthorGuard.ts, which holds the rule. A
-  // series' Co-authors — or a Moderator under `any` — are the ones who may
-  // change which books it holds and in what order.
   const MAY_ONLY_CHANGE_OWN = 'You may only change books you co-author';
 
   // Filing a book under a series changes that series too — it starts listing
@@ -50,6 +47,8 @@ export function createBookController(
     seriesId: number | null | undefined
   ): Promise<void> => {
     if (seriesId === null || seriesId === undefined) return;
+    // A series' Co-authors, or a Moderator under `any`, may change which books
+    // it holds and their order.
     await guard.assertMayChange(
       req,
       { series: seriesId },

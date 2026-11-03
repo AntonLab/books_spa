@@ -27,7 +27,6 @@ export function createSeriesController(
   repository: SeriesRepository,
   guard: CoAuthorGuard
 ) {
-  // Row-level checks go through the guard, which holds the rule.
   const MAY_ONLY_CHANGE_OWN = 'You may only change series you co-author';
 
   return {
