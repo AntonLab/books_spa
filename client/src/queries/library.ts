@@ -11,6 +11,7 @@ import {
   toggleSeriesNotInterested,
   type ListLibraryParams,
 } from '../api/library';
+import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
 
 export const useLibrary = (params: ListLibraryParams, enabled = true) => {
@@ -68,11 +69,7 @@ export const useBookLibraryActions = () => {
     addFn: addBookToLibrary,
     toggleFn: toggleBookNotInterested,
     removeFn: clearReadingStatus,
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allLibrary }),
-      ]),
+    onSettled: () => applyChange(queryClient, { type: 'bookLibraryChanged' }),
   });
 };
 
@@ -85,13 +82,7 @@ export const useSeriesLibraryActions = (seriesId: number) => {
     toggleFn: () => toggleSeriesNotInterested(seriesId),
     removeFn: () => removeSeriesFromLibrary(seriesId),
     onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.seriesDetail(seriesId),
-        }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allLibrary }),
-      ]),
+      applyChange(queryClient, { type: 'seriesLibraryChanged', id: seriesId }),
   });
 };
 
@@ -109,10 +100,6 @@ export const useReadingProgressMutation = () => {
       payload: ReadingProgressPayload;
     }) => postReadingProgress(variables.bookId, variables.payload),
     onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allSeries }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.allLibrary }),
-      ]),
+      applyChange(queryClient, { type: 'readingProgressRecorded' }),
   });
 };
