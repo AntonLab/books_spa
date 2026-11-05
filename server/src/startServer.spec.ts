@@ -25,8 +25,8 @@ interface Harness {
   app: Express;
 }
 
-// Fakes for every factory: no timer, socket or database is involved, so each
-// test sees only the order and arguments of the calls.
+// Fakes for every factory: no timer, socket or database. Tests see only call
+// order and arguments.
 function harness(opts: HarnessOptions = {}): Harness {
   const calls: string[] = [];
   const pushes: Array<[number, PublicNotification]> = [];

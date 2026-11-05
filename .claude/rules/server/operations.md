@@ -32,12 +32,7 @@ as its first middleware, so errors, 404s and parse failures carry it too.
   and exits 1, as does a pool that fails to close.
 - `shutdown.stopping` turns true on the first call; `index.ts` checks it after
   the last startup await, before anything starts, and ends boot if it is set.
-- `stoppables` holds one entry: `startServer`'s `stop()`. The start order, the
-  stop order (expiry purge, announcement pass, online registry, rate limits)
-  and the rollback of a failed start live in `startServer.ts`, pinned by
-  `startServer.spec.ts`.
-- A startup failure inside `startServer` stops what it already created and
-  rethrows; `index.ts` then takes the `shutdown('startup failed')` path.
+- `stoppables` holds one entry: `startServer`'s `stop()`. Start order, stop order (expiry purge, announcement pass, online registry, rate limits) and rollback of a failed start live in `startServer.ts`, pinned by `startServer.spec.ts`.
 - `npm run dev` restarts with `SIGTERM`, so every dev restart takes this path.
   `shutdown.spec.ts` keeps using fakes, not real signals.
 
@@ -96,8 +91,7 @@ database hiccup costs one pass, not the process.
   The client's `onClosed` retries after 30 s, and the bell's polling covers the
   gap.
 - The shutdown stops the registry before `server.close()`, which would
-  otherwise wait on every open stream. The announcement pass stops before the
-  registry, so no pass pushes to a closed stream.
+  otherwise wait on every open stream.
 
 ## Error handler
 

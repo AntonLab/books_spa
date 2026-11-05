@@ -36,9 +36,8 @@ interface Parts {
   authRateLimits?: { stop(): void };
 }
 
-// Builds the background parts and the app. A failure part-way stops whatever
-// already started and rethrows, so the caller never holds a half-started
-// server.
+// Builds the background parts and the app. On failure, stops the parts already
+// started and rethrows.
 export function startServer(deps: StartServerDeps): StartedServer {
   const parts: Parts = {};
 
@@ -108,11 +107,10 @@ export function startServer(deps: StartServerDeps): StartedServer {
     });
     return { app, stop: stopAll };
   } catch (error) {
-    // The start error is the one that matters; a failing stop is swallowed.
     try {
       stopAll();
     } catch {
-      // see above
+      // Rollback must not mask the start error.
     }
     throw error;
   }
