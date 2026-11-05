@@ -29,9 +29,8 @@ brief file. It runs the same chain as a plan task: `sdd-implementer`, then
   `docs/superpowers/queue/YYYY-MM-DD-<name>.json` (issues with `status` `done`),
   not the commit subjects.
 - **A mutation check in an implementer report gives the command and the
-  failing test name.** The command is `npm run mutate -- <file> <from> <to> --
-<test command>`. A reviewer may run `npm run mutate` itself: it restores the
-  file (and refuses a dirty or untracked one).
+  failing test name.** The command is `npm run mutate -- <file> <from> <to> -- <test command>`.
+  A reviewer may run it: see `tooling.md`.
 - **Review package without a plan:** pass the brief file where the plan goes,
   `bash scripts/sdd-step.sh review <brief.md> <BASE> [HEAD]`. It writes the
   diff under `.superpowers/sdd/<brief-name>/` and prints the path. Do not

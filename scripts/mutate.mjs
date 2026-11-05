@@ -1,12 +1,7 @@
 /**
- * Applies one literal replacement to a tracked, clean file, runs a test
- * command, prints KILLED (the command failed, so a test caught the change) or
- * SURVIVED, and restores the file. Usage: see `usage` below.
- *
- * The working tree is left as found, so a read-only reviewer may call it. It
- * refuses an untracked or dirty file, a path outside the repo, and a `from`
- * that does not occur exactly once. The command runs through the shell: the
- * caller quotes it. The logic is in `mutate-lib.mjs`.
+ * CLI for `mutate` in `mutate-lib.mjs`: reads `<file> <from> <to> -- <test
+ * command>`, prints the result, exits 1 on a `Refusal` and 2 on bad usage. The
+ * command runs through the shell, so the caller quotes it.
  */
 import { resolve } from 'node:path';
 import { Refusal, UsageError, formatResult, mutate } from './mutate-lib.mjs';

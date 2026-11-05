@@ -1,16 +1,13 @@
 /**
  * Core of the mutation script: replaces one exact string in one tracked file,
  * runs a command, reports whether the command caught the change, and restores
- * the file with `git checkout`.
+ * the file.
  *
- * Refuses (`Refusal`, CLI exit 1) a path outside the repo or under `.git`,
- * `node_modules`, `.claude` or `docs/superpowers`, an untracked or dirty file
- * (a restore would destroy its edits), and a `from` found zero or several
- * times. An empty `from` is a `UsageError` (CLI exit 2). The file is written
- * as utf8 with no newline normalisation, so CRLF files keep their bytes.
- *
- * Verdict: `KILLED` when the command fails (the change was caught),
- * `SURVIVED` when it exits 0.
+ * Refuses (`Refusal`, CLI exit 1) a path outside the repo or under
+ * `DISALLOWED`, an untracked or dirty file (a restore would destroy its
+ * edits), and a `from` found 0 or 2+ times. An empty `from` is a `UsageError`
+ * (CLI exit 2). The file is written as utf8 with no newline normalisation, so
+ * CRLF bytes survive.
  */
 import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -57,6 +54,8 @@ const run = (command, cwd) =>
     child.on('close', (code) => resolve({ exitCode: code ?? 1, output }));
   });
 
+const lf = (s) => s.replace(/\r\n/g, '\n');
+
 const count = (text, re) => {
   const m = text.match(re);
   return m ? Number(m[1]) : null;
@@ -69,7 +68,7 @@ const names = (text, re, skip) => [
 ];
 
 export const parseReport = (output) => {
-  const text = output.replace(/\r\n/g, '\n');
+  const text = lf(output);
   const pass = count(text, /^(?:#|ℹ) pass (\d+)/m);
   const fail = count(text, /^(?:#|ℹ) fail (\d+)/m);
   if (pass !== null && fail !== null)
@@ -94,10 +93,7 @@ export const parseReport = (output) => {
 export const formatResult = ({ verdict, output }) => {
   const report = parseReport(output);
   if (!report)
-    return [
-      verdict,
-      ...output.replace(/\r\n/g, '\n').trimEnd().split('\n').slice(-20),
-    ].join('\n');
+    return [verdict, ...lf(output).trimEnd().split('\n').slice(-20)].join('\n');
   return [
     verdict,
     ...(report.failed.length
