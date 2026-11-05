@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
+  copyFileSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -313,4 +314,56 @@ test('formatResult prints the last 20 lines when nothing is recognised', () => {
       '\n'
     )
   );
+});
+
+const cli = (root, ...args) => {
+  mkdirSync(join(root, 'scripts'), { recursive: true });
+  for (const file of ['mutate.mjs', 'mutate-lib.mjs']) {
+    copyFileSync(
+      join(import.meta.dirname, '..', file),
+      join(root, 'scripts', file)
+    );
+  }
+  return spawnSync('node', [join(root, 'scripts', 'mutate.mjs'), ...args], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+};
+
+test('cli prints KILLED and exits 0 even though the command failed', (t) => {
+  const root = sandbox(t);
+  const r = cli(root, 'a.txt', 'alpha', 'omega', '--', 'node', 'check.mjs');
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /^KILLED/);
+  assert.equal(git(root, 'status', '--porcelain', '--', 'a.txt'), '');
+});
+
+test('cli prints SURVIVED and exits 0', (t) => {
+  const root = sandbox(t);
+  const r = cli(root, 'a.txt', 'beta', 'gamma', '--', 'node', 'check.mjs');
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /^SURVIVED/);
+});
+
+test('cli exits 1 with the reason on a refusal', (t) => {
+  const root = sandbox(t);
+  const r = cli(root, 'a.txt', 'zzz', 'y', '--', 'node', 'check.mjs');
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /0 occurrences/);
+});
+
+test('cli exits 2 with usage on bad arguments', (t) => {
+  const root = sandbox(t);
+  for (const args of [
+    [],
+    ['a.txt', 'alpha', 'omega'],
+    ['a.txt', 'alpha', 'omega', 'node', 'check.mjs'],
+    ['a.txt', 'alpha', 'omega', '--'],
+    ['a.txt', '', 'omega', '--', 'node', 'check.mjs'],
+  ]) {
+    const r = cli(root, ...args);
+    assert.equal(r.status, 2, JSON.stringify(args));
+    assert.match(r.stderr, /usage: npm run mutate/);
+  }
+  assert.equal(readFileSync(join(root, 'a.txt'), 'utf8'), 'alpha beta\n');
 });
