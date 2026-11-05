@@ -9,8 +9,8 @@
  * (CLI exit 2). The file is written as utf8 with no newline normalisation, so
  * CRLF bytes survive.
  */
-import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 export class Refusal extends Error {}
@@ -24,7 +24,12 @@ const git = (cwd, ...args) =>
 export const repoRelative = (root, file, pathApi = path) => {
   const abs = pathApi.resolve(root, file);
   const rel = pathApi.relative(root, abs);
-  if (rel === '' || rel.startsWith('..') || pathApi.isAbsolute(rel))
+  if (
+    rel === '' ||
+    rel === '..' ||
+    rel.startsWith(`..${pathApi.sep}`) ||
+    pathApi.isAbsolute(rel)
+  )
     throw new Refusal(`${file} is outside the repo`);
   const posix = rel.split(pathApi.sep).join('/');
   const lower = `${posix.toLowerCase()}/`;
@@ -44,19 +49,45 @@ export const restore = (root, rel) => {
   git(root, 'checkout', '--', rel);
 };
 
-const run = (command, cwd) =>
-  new Promise((resolve) => {
-    const child = spawn(command, { shell: true, cwd });
+const restoreOrExplain = (root, rel) => {
+  try {
+    restore(root, rel);
+  } catch (cause) {
+    throw new Error(`${rel} left mutated: run git checkout -- ${rel}`, {
+      cause,
+    });
+  }
+};
+
+const isInside = (root, target) => {
+  const rel = path.relative(root, target);
+  return (
+    rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
+  );
+};
+
+const run = (command, cwd) => {
+  const child = spawn(command, { shell: true, cwd });
+  // With `shell: true` the child is the shell; on Windows its tree needs taskkill.
+  const kill = () => {
+    // taskkill goes first: once the shell is dead its children are orphaned.
+    if (process.platform === 'win32' && child.pid !== undefined)
+      spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+    child.kill();
+  };
+  const done = new Promise((resolve) => {
     let output = '';
     child.stdout.on('data', (chunk) => (output += chunk));
     child.stderr.on('data', (chunk) => (output += chunk));
     child.on('error', (err) => resolve({ exitCode: 1, output: String(err) }));
     child.on('close', (code) => resolve({ exitCode: code ?? 1, output }));
   });
+  return { kill, done };
+};
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
 
-const count = (text, re) => {
+const numberAfter = (text, re) => {
   const m = text.match(re);
   return m ? Number(m[1]) : null;
 };
@@ -69,13 +100,13 @@ const names = (text, re, skip) => [
 
 export const parseReport = (output) => {
   const text = lf(output);
-  const pass = count(text, /^(?:#|ℹ) pass (\d+)/m);
-  const fail = count(text, /^(?:#|ℹ) fail (\d+)/m);
+  const pass = numberAfter(text, /^(?:#|ℹ) pass (\d+)/m);
+  const fail = numberAfter(text, /^(?:#|ℹ) fail (\d+)/m);
   if (pass !== null && fail !== null)
     return {
       failed: names(
         text,
-        /^\s*✖ (.+?)(?: \(\d+(?:\.\d+)?ms\))?$/gm,
+        /^[ \t]*✖ (.+?)(?: \(\d+(?:\.\d+)?ms\))?$/gm,
         'failing tests:'
       ),
       pass,
@@ -84,16 +115,20 @@ export const parseReport = (output) => {
   const summary = text.match(/^Tests:.*$/m);
   if (!summary) return null;
   return {
-    failed: names(text, /^\s*✕ (.+?)(?: \(\d+ ms\))?$/gm),
-    pass: count(summary[0], /(\d+) passed/) ?? 0,
-    fail: count(summary[0], /(\d+) failed/) ?? 0,
+    failed: names(text, /^[ \t]*✕ (.+?)(?: \(\d+ ms\))?$/gm),
+    pass: numberAfter(summary[0], /(\d+) passed/) ?? 0,
+    fail: numberAfter(summary[0], /(\d+) failed/) ?? 0,
   };
 };
 
 export const formatResult = ({ verdict, output }) => {
   const report = parseReport(output);
-  if (!report)
-    return [verdict, ...lf(output).trimEnd().split('\n').slice(-20)].join('\n');
+  if (!report) {
+    const tail = lf(output).trimEnd();
+    return tail === ''
+      ? verdict
+      : [verdict, ...tail.split('\n').slice(-20)].join('\n');
+  }
   return [
     verdict,
     ...(report.failed.length
@@ -114,7 +149,12 @@ export const mutate = async ({ root, file, from, to, command, onApplied }) => {
   if (git(root, 'status', '--porcelain', '--', rel).trim() !== '')
     throw new Refusal(`${rel} is dirty: commit or stash it first`);
   const abs = path.join(root, rel);
-  const text = readFileSync(abs, 'utf8');
+  if (!isInside(realpathSync(root), realpathSync(abs)))
+    throw new Refusal(`${rel} resolves outside the repo`);
+  const buf = readFileSync(abs);
+  const text = buf.toString('utf8');
+  if (!Buffer.from(text).equals(buf))
+    throw new Refusal(`${rel} is not valid UTF-8`);
   const count = countOccurrences(text, from);
   if (count !== 1)
     throw new Refusal(
@@ -127,14 +167,15 @@ export const mutate = async ({ root, file, from, to, command, onApplied }) => {
     'utf8'
   );
   try {
-    onApplied?.(() => restore(root, rel));
-    const { exitCode, output } = await run(command, root);
+    const { kill, done } = run(command, root);
+    onApplied?.({ restore: () => restoreOrExplain(root, rel), kill });
+    const { exitCode, output } = await done;
     return {
       verdict: exitCode === 0 ? 'SURVIVED' : 'KILLED',
       exitCode,
       output,
     };
   } finally {
-    restore(root, rel);
+    restoreOrExplain(root, rel);
   }
 };

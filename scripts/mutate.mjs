@@ -15,13 +15,18 @@ const fail = (message, code) => {
 };
 
 // Restore on Ctrl-C or a kill, since `finally` does not run on process.exit.
-const restoreOnSignal = (restore) => {
+const restoreOnSignal = ({ restore, kill }) => {
   for (const [signal, code] of [
     ['SIGINT', 130],
     ['SIGTERM', 143],
   ]) {
     process.once(signal, () => {
-      restore();
+      kill();
+      try {
+        restore();
+      } catch (error) {
+        console.error(error.message);
+      }
       process.exit(code);
     });
   }

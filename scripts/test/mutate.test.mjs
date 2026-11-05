@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -78,6 +79,14 @@ test('repoRelative refuses outside and disallowed paths for both separators', ()
     repoRelative('/r', 'docs/superpowers-x/a.md', path.posix),
     'docs/superpowers-x/a.md'
   );
+});
+
+test('repoRelative accepts a name that merely starts with two dots', () => {
+  assert.equal(repoRelative('/r', '..foo', path.posix), '..foo');
+  assert.equal(repoRelative('C:\\r', '..foo', path.win32), '..foo');
+  assert.throws(() => repoRelative('/r', '../x', path.posix), Refusal);
+  assert.throws(() => repoRelative('C:\\r', '..\\x', path.win32), Refusal);
+  assert.throws(() => repoRelative('C:\\r', '..', path.win32), Refusal);
 });
 
 test('countOccurrences counts overlapping matches', () => {
@@ -163,12 +172,113 @@ test('mutate calls onApplied with a working restore before the command ends', as
   const root = sandbox(t);
   let seen = '';
   await run(root, 'beta', 'gamma', {
-    onApplied: (restoreNow) => {
+    onApplied: ({ restore }) => {
       seen = readFileSync(join(root, 'a.txt'), 'utf8');
-      restoreNow();
+      restore();
     },
   });
   assert.equal(seen, 'alpha gamma\n');
+});
+
+test('mutate ends a sleeping command early when onApplied kills it', async (t) => {
+  const root = sandbox(t);
+  const started = Date.now();
+  const r = await mutate({
+    root,
+    file: 'a.txt',
+    from: 'alpha',
+    to: 'omega',
+    command: 'node -e "setTimeout(() => {}, 20000)"',
+    onApplied: ({ kill }) => setTimeout(kill, 500),
+  });
+  assert.equal(r.verdict, 'KILLED');
+  assert.ok(Date.now() - started < 10000, 'run ended long before the sleep');
+  assert.equal(readFileSync(join(root, 'a.txt'), 'utf8'), 'alpha beta\n');
+  assert.equal(git(root, 'status', '--porcelain'), '');
+});
+
+test('mutate names the file and the fix when restore fails', async (t) => {
+  const root = sandbox(t);
+  await assert.rejects(
+    mutate({
+      root,
+      file: 'a.txt',
+      from: 'alpha',
+      to: 'omega',
+      command: `node -e "require('node:fs').writeFileSync('.git/index.lock', '')"`,
+    }),
+    /a\.txt left mutated: run git checkout -- a\.txt/
+  );
+  rmSync(join(root, '.git', 'index.lock'));
+  git(root, 'checkout', '--', 'a.txt');
+  assert.equal(readFileSync(join(root, 'a.txt'), 'utf8'), 'alpha beta\n');
+});
+
+test('mutate restores non-ASCII text byte for byte', async (t) => {
+  const root = sandbox(t);
+  writeFileSync(join(root, 'a.txt'), 'alpha é beta\n');
+  commit(root, '-qam', 'accent');
+  const before = readFileSync(join(root, 'a.txt'));
+  const r = await run(root, 'beta', 'gamma');
+  assert.equal(r.verdict, 'SURVIVED');
+  assert.ok(readFileSync(join(root, 'a.txt')).equals(before));
+});
+
+test('mutate counts overlapping matches as two occurrences', async (t) => {
+  const root = sandbox(t);
+  writeFileSync(join(root, 'a.txt'), 'aaa');
+  commit(root, '-qam', 'aaa');
+  await assert.rejects(run(root, 'aa', 'b'), /2 occurrences/);
+  await assert.rejects(run(root, 'aa', 'b'), Refusal);
+});
+
+test('mutate reports a signal-killed command as KILLED with exit code 1', async (t) => {
+  const root = sandbox(t);
+  const r = await mutate({
+    root,
+    file: 'a.txt',
+    from: 'alpha',
+    to: 'omega',
+    command: `node -e "process.kill(process.pid, 'SIGKILL')"`,
+  });
+  assert.equal(r.verdict, 'KILLED');
+  assert.equal(r.exitCode, 1);
+  assert.equal(readFileSync(join(root, 'a.txt'), 'utf8'), 'alpha beta\n');
+});
+
+test('mutate refuses a file that is not valid UTF-8', async (t) => {
+  const root = sandbox(t);
+  writeFileSync(join(root, 'a.txt'), Buffer.from([0x61, 0xff, 0xfe, 0x62]));
+  commit(root, '-qam', 'binary');
+  await assert.rejects(run(root, 'a', 'x'), /a\.txt is not valid UTF-8/);
+  assert.equal(git(root, 'status', '--porcelain'), '');
+});
+
+test('mutate refuses a symlink that resolves outside the repo', async (t) => {
+  const root = sandbox(t);
+  const outside = mkdtempSync(join(tmpdir(), 'mutate-out-'));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  writeFileSync(join(outside, 'target.txt'), 'alpha\n');
+  git(root, 'config', 'core.symlinks', 'true');
+  try {
+    symlinkSync(join(outside, 'target.txt'), join(root, 'link.txt'));
+  } catch (error) {
+    if (error.code === 'EPERM') return t.skip('symlinks need privileges');
+    throw error;
+  }
+  git(root, 'add', 'link.txt');
+  commit(root, '-qm', 'link');
+  await assert.rejects(
+    mutate({
+      root,
+      file: 'link.txt',
+      from: 'alpha',
+      to: 'omega',
+      command: 'node check.mjs',
+    }),
+    /link\.txt resolves outside the repo/
+  );
+  assert.equal(readFileSync(join(outside, 'target.txt'), 'utf8'), 'alpha\n');
 });
 
 const nodeOut = [
@@ -241,6 +351,24 @@ test('formatResult prints the last 20 lines when nothing is recognised', () => {
       '\n'
     )
   );
+});
+
+test('formatResult prints only the verdict for empty output', () => {
+  assert.equal(formatResult({ verdict: 'KILLED', output: '' }), 'KILLED');
+});
+
+test('formatResult drops CR and trailing blank lines from the tail', () => {
+  assert.equal(
+    formatResult({ verdict: 'KILLED', output: 'one\r\ntwo\r\n\r\n\r\n' }),
+    'KILLED\none\ntwo'
+  );
+});
+
+test('parseReport name regexes do not reach across a blank line', () => {
+  const node = '# pass 1\n# fail 1\n\n\n✖ b bad (0.10ms)\n';
+  assert.deepEqual(parseReport(node).failed, ['b bad']);
+  const jest = 'Tests: 1 failed\n\n\n  ✕ subtracts (3 ms)\n';
+  assert.deepEqual(parseReport(jest).failed, ['subtracts']);
 });
 
 const cli = (root, ...args) => {
