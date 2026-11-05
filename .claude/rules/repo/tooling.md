@@ -110,6 +110,9 @@ It runs in `npm run lint` after `doc-limits` and in the pre-commit hook.
 `brief-check.mjs` (`npm run brief:check -- <brief.md>`) prints a `git grep`
 hit count per name, using `extractTokens`, `isSuffixOf` and `trackedFiles` from
 `doc-refs.mjs`; the logic is in `brief-refs.mjs`.
+`mutate.mjs` (`npm run mutate`) applies one literal replacement to a tracked,
+clean file, runs the test command, prints KILLED or SURVIVED, and restores the
+file; the logic is in `mutate-lib.mjs`.
 `sdd-step.sh` finds the superpowers scripts by globbing the plugin cache for
 the newest version, so it needs no update when the plugin does.
 `layout-lint.mjs` (`npm run layout-lint`) is the one script with a dependency,

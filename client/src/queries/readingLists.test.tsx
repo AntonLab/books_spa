@@ -145,12 +145,12 @@ it('useReorderReadingListItems rewrites the cached items at once and sends the i
   const { result, queryClient } = renderHookWithProviders(() =>
     useReorderReadingListItems(4)
   );
-  const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
   queryClient.setQueryData(queryKeys.readingListItems(4), { items: rows });
   await act(() => result.current.mutateAsync([2, 1]));
   expect(mocked.reorderReadingListItems).toHaveBeenCalledWith(4, [2, 1]);
-  expect(invalidate).toHaveBeenCalledWith({
-    queryKey: queryKeys.allReadingLists,
+  expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+    type: 'listReordered',
+    keys: [queryKeys.readingListItems(4), queryKeys.allReadingLists],
   });
   const cached = queryClient.getQueryData<{ items: { id: number }[] }>(
     queryKeys.readingListItems(4)

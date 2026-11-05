@@ -18,6 +18,7 @@ import {
   registerShutdownSignals,
   type ShutdownDeps,
 } from './shutdown.ts';
+import { startServer } from './startServer.ts';
 
 function loadLocalEnv(): void {
   try {
@@ -38,7 +39,7 @@ async function main(): Promise<void> {
   }
 
   const sequelize = createSequelize(config.db);
-  // Filled as each stoppable starts, so a later startup failure still stops it.
+  // Holds startServer's single stop() once boot is past it.
   const stoppables: ShutdownDeps['stoppables'][number][] = [];
   const shutdownDeps: ShutdownDeps = {
     sequelize,
@@ -70,51 +71,22 @@ async function main(): Promise<void> {
     // has started, so boot ends here.
     if (shutdown.stopping) return;
 
-    const repositories = createSequelizeRepositories();
-    const {
-      sessionRepository,
-      passwordResetRepository,
-      notificationRepository,
-    } = repositories;
     // After syncPermissions(): by now the schema is known to be provisioned.
-    const expiryPurge = startExpiryPurge({
-      sessionRepository,
-      passwordResetRepository,
-      notificationRepository,
-    });
-    stoppables.push(expiryPurge);
-    const onlineRegistry = createOnlineRegistry({ sessionRepository });
-    onlineRegistry.start();
-    stoppables.push(onlineRegistry);
-    // Credit Notifications are written inside repository transactions, which
-    // know nothing of the registry; this is where the two meet.
-    setNotificationPublisher((userId, notification) =>
-      onlineRegistry.push(userId, notification)
-    );
-    const mailDelivery = createMailDelivery(config.mail);
-    // After syncPermissions() like the expiry purge: the first pass runs now.
-    const announcementPass = startAnnouncementPass({
+    const { app, stop } = startServer({
+      repositories: createSequelizeRepositories(),
       announcementRepository: createSequelizeAnnouncementRepository(),
-      onlineRegistry,
-      mailDelivery,
+      mailConfig: config.mail,
       appBaseUrl: config.appBaseUrl,
-    });
-    // Final stop order: expiry purge, announcement pass, online registry, rate
-    // limits. The pass stops before the registry, so no pass pushes to a stream
-    // the registry has just closed.
-    stoppables.splice(stoppables.indexOf(onlineRegistry), 0, announcementPass);
-    const authRateLimits = createAuthRateLimits();
-    stoppables.push(authRateLimits);
-
-    const app = createApp({
-      ...repositories,
-      mailDelivery,
-      appBaseUrl: config.appBaseUrl,
-      onlineRegistry,
-      trustedOrigin: config.appBaseUrl,
       trustProxy: config.trustProxy,
-      authRateLimits,
+      startExpiryPurge,
+      createOnlineRegistry,
+      startAnnouncementPass,
+      createMailDelivery,
+      createAuthRateLimits,
+      createApp,
+      setNotificationPublisher,
     });
+    stoppables.push({ stop });
     // Express 5 hands this callback the bind error (EADDRINUSE); Express 4 never
     // did, so code written for it logs "listening" for a server that never
     // started. The bind failure takes the shutdown path: the pool closes and

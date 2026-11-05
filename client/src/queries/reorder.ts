@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryKey } from '@tanstack/react-query';
+import { applyChange } from './applyChange';
 
 // Saves a new order on drop, optimistically, for any cached list whose rows
 // carry an id: a book's chapters, a series' books. The list under `listKey` is
@@ -39,9 +40,10 @@ export const useOptimisticReorder = <TList extends { items: { id: number }[] }>(
       }
     },
     onSettled: () => {
-      for (const queryKey of [listKey, ...alsoInvalidate]) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
+      void applyChange(queryClient, {
+        type: 'listReordered',
+        keys: [listKey, ...alsoInvalidate],
+      });
     },
   });
 };

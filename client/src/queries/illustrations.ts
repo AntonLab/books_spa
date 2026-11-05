@@ -6,6 +6,7 @@ import {
   updateIllustrationCaption,
   uploadIllustration,
 } from '../api/illustrations';
+import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
 import { useOptimisticReorder } from './reorder';
 import type { ItemsResponse } from 'shared';
@@ -31,8 +32,9 @@ const useIllustrationMutation = <TVariables, TResult>(
     // with a second context argument an API function never declared.
     mutationFn: (variables: TVariables) => mutationFn(variables),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.illustrations(chapterId),
+      void applyChange(queryClient, {
+        type: 'illustrationsChanged',
+        chapterId,
       });
     },
   });
