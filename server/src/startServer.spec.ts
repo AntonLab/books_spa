@@ -195,21 +195,25 @@ test('a stop that throws during rollback does not replace the start error', () =
   );
 });
 
-test('a throwing stop() still stops the later parts and rethrows the first error', () => {
-  const h = harness({ failStopOf: ['pass.stop'] });
-  const started = startServer(h.deps);
-  h.calls.length = 0;
-  assert.throws(() => started.stop(), /pass\.stop failed/);
-  assert.deepEqual(h.calls, STOP_ORDER);
-});
-
-test('when two stops throw, stop() rethrows the first error', () => {
-  const h = harness({ failStopOf: ['pass.stop', 'registry.stop'] });
-  const started = startServer(h.deps);
-  h.calls.length = 0;
-  assert.throws(() => started.stop(), /pass\.stop failed/);
-  assert.deepEqual(h.calls, STOP_ORDER);
-});
+for (const { title, failStopOf } of [
+  {
+    title:
+      'a throwing stop() still stops the later parts and rethrows the first error',
+    failStopOf: ['pass.stop'],
+  },
+  {
+    title: 'when two stops throw, stop() rethrows the first error',
+    failStopOf: ['pass.stop', 'registry.stop'],
+  },
+]) {
+  test(title, () => {
+    const h = harness({ failStopOf });
+    const started = startServer(h.deps);
+    h.calls.length = 0;
+    assert.throws(() => started.stop(), /pass\.stop failed/);
+    assert.deepEqual(h.calls, STOP_ORDER);
+  });
+}
 
 test("stop() twice calls every part's stop again without throwing", () => {
   const h = harness();
