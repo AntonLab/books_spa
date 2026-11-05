@@ -60,12 +60,23 @@ const restoreOrExplain = (root, rel) => {
 };
 
 const run = (command, cwd) => {
-  const child = spawn(command, { shell: true, cwd });
-  // With `shell: true` the child is the shell; on Windows its tree needs taskkill.
+  const win32 = process.platform === 'win32';
+  // With `shell: true` the child is the shell. Windows kills its tree with
+  // taskkill; elsewhere the child leads its own process group, so one signal
+  // reaches the command too (a lone `sh` kill orphans it, and `close` waits).
+  const child = spawn(command, { shell: true, cwd, detached: !win32 });
   const kill = () => {
-    // taskkill goes first: once the shell is dead its children are orphaned.
-    if (process.platform === 'win32' && child.pid !== undefined)
-      spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+    if (child.pid !== undefined) {
+      if (win32)
+        // taskkill goes first: once the shell is dead its children are orphaned.
+        spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+      else
+        try {
+          process.kill(-child.pid, 'SIGKILL');
+        } catch {
+          // The group already exited.
+        }
+    }
     child.kill();
   };
   const done = new Promise((resolve) => {
