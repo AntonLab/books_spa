@@ -14,7 +14,9 @@ import {
   Refusal,
   UsageError,
   countOccurrences,
+  formatResult,
   mutate,
+  parseReport,
   repoRelative,
 } from '../mutate-lib.mjs';
 
@@ -239,4 +241,76 @@ test('mutate calls onApplied with a working restore before the command ends', as
     },
   });
   assert.equal(seen, 'alpha gamma\n');
+});
+
+const nodeOut = [
+  '✔ a ok (0.37ms)',
+  '✖ b bad (0.10ms)',
+  'ℹ tests 2',
+  'ℹ pass 1',
+  'ℹ fail 1',
+  '✖ failing tests:',
+  '✖ b bad (0.10ms)',
+].join('\n');
+const jestOut = [
+  '  ✓ adds (2 ms)',
+  '  ✕ subtracts (3 ms)',
+  'Tests:       1 failed, 4 passed, 5 total',
+].join('\n');
+
+test('parseReport reads node --test output, once per failing name', () => {
+  assert.deepEqual(parseReport(nodeOut), {
+    failed: ['b bad'],
+    pass: 1,
+    fail: 1,
+  });
+});
+
+test('parseReport reads TAP-style counts from node --test', () => {
+  assert.deepEqual(parseReport('# pass 3\n# fail 0'), {
+    failed: [],
+    pass: 3,
+    fail: 0,
+  });
+});
+
+test('parseReport reads jest output, missing counts as 0', () => {
+  assert.deepEqual(parseReport(jestOut), {
+    failed: ['subtracts'],
+    pass: 4,
+    fail: 1,
+  });
+  assert.deepEqual(parseReport('Tests:       3 passed, 3 total'), {
+    failed: [],
+    pass: 3,
+    fail: 0,
+  });
+});
+
+test('parseReport returns null for output of another runner', () => {
+  assert.equal(parseReport('FAIL src/x.spec.ts\n1 failing'), null);
+});
+
+test('formatResult prints verdict, failing names and counts', () => {
+  assert.equal(
+    formatResult({ verdict: 'KILLED', output: nodeOut }),
+    'KILLED\nfailing tests:\n  - b bad\npass 1, fail 1'
+  );
+  assert.equal(
+    formatResult({ verdict: 'SURVIVED', output: '# pass 3\n# fail 0' }),
+    'SURVIVED\npass 3, fail 0'
+  );
+});
+
+test('formatResult prints the last 20 lines when nothing is recognised', () => {
+  const output = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join(
+    '\n'
+  );
+  const text = formatResult({ verdict: 'KILLED', output });
+  assert.equal(
+    text,
+    ['KILLED', ...Array.from({ length: 20 }, (_, i) => `line ${i + 11}`)].join(
+      '\n'
+    )
+  );
 });

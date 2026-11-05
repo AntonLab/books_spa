@@ -57,6 +57,56 @@ const run = (command, cwd) =>
     child.on('close', (code) => resolve({ exitCode: code ?? 1, output }));
   });
 
+const count = (text, re) => {
+  const m = text.match(re);
+  return m ? Number(m[1]) : null;
+};
+
+const names = (text, re, skip) => [
+  ...new Set(
+    [...text.matchAll(re)].map((m) => m[1]).filter((name) => name !== skip)
+  ),
+];
+
+export const parseReport = (output) => {
+  const text = output.replace(/\r\n/g, '\n');
+  const pass = count(text, /^(?:#|ℹ) pass (\d+)/m);
+  const fail = count(text, /^(?:#|ℹ) fail (\d+)/m);
+  if (pass !== null && fail !== null)
+    return {
+      failed: names(
+        text,
+        /^\s*✖ (.+?)(?: \(\d+(?:\.\d+)?ms\))?$/gm,
+        'failing tests:'
+      ),
+      pass,
+      fail,
+    };
+  const summary = text.match(/^Tests:.*$/m);
+  if (!summary) return null;
+  return {
+    failed: names(text, /^\s*✕ (.+?)(?: \(\d+ ms\))?$/gm),
+    pass: count(summary[0], /(\d+) passed/) ?? 0,
+    fail: count(summary[0], /(\d+) failed/) ?? 0,
+  };
+};
+
+export const formatResult = ({ verdict, output }) => {
+  const report = parseReport(output);
+  if (!report)
+    return [
+      verdict,
+      ...output.replace(/\r\n/g, '\n').trimEnd().split('\n').slice(-20),
+    ].join('\n');
+  return [
+    verdict,
+    ...(report.failed.length
+      ? ['failing tests:', ...report.failed.map((n) => `  - ${n}`)]
+      : []),
+    `pass ${report.pass}, fail ${report.fail}`,
+  ].join('\n');
+};
+
 export const mutate = async ({ root, file, from, to, command, onApplied }) => {
   if (from === '') throw new UsageError('from must not be empty');
   const rel = repoRelative(root, file);
