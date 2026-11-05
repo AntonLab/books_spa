@@ -20,7 +20,10 @@ export type Change =
   | { type: 'favoriteToggled'; detailKey: QueryKey }
   | { type: 'favoriteRemoved' }
   | { type: 'accountChanged' }
-  | { type: 'genreChanged' };
+  | { type: 'genreChanged' }
+  | { type: 'sessionStale' }
+  | { type: 'accountSwitched' }
+  | { type: 'notificationsChanged'; userId: number };
 
 // A delete skips the deleted record's own detail: its page is still mounted,
 // would refetch into a 404 and redirect with "no longer exists" before the
@@ -200,6 +203,30 @@ export const applyChange = async (
         queryClient.invalidateQueries({ queryKey: queryKeys.genres }),
         queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
         queryClient.invalidateQueries({ queryKey: queryKeys.allSeries }),
+      ]);
+      return;
+    // Another tab or a closed stream says the session may have ended: only
+    // /auth/me is asked again, so a Lost session surfaces.
+    case 'sessionStale':
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.session }),
+      ]);
+      return;
+    // The session is the query that told us, so refetching it again is
+    // pointless; notifications and settings were already removed by the caller.
+    case 'accountSwitched':
+      await Promise.all([
+        queryClient.invalidateQueries({
+          predicate: (query) => query.queryHash !== hashKey(queryKeys.session),
+        }),
+      ]);
+      return;
+    // A pushed or polled Notification changes only that Account's list.
+    case 'notificationsChanged':
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.notifications(change.userId),
+        }),
       ]);
       return;
     default:

@@ -26,6 +26,8 @@ const KEYS = [
   ['authors', { q: 'a' }],
   ['accounts', 3],
   ['notifications', 1],
+  ['reports'],
+  ['illustrations', { chapterId: 5 }],
 ] as const;
 
 const staleAfter = async (change: Change) => {
@@ -274,6 +276,36 @@ describe('applyChange', () => {
         detailKey: ['books', id],
       });
       expect(stale).toContain(j(['books', id]));
+    }
+  );
+
+  it('sessionStale refreshes only the session', async () => {
+    expect(await staleAfter({ type: 'sessionStale' })).toEqual(
+      s(['auth', 'me'])
+    );
+  });
+
+  it('accountSwitched refreshes every query except the session', async () => {
+    const stale = await staleAfter({ type: 'accountSwitched' });
+    expect(stale).not.toContain(j(['auth', 'me']));
+    expect(stale).toHaveLength(KEYS.length - 1);
+  });
+
+  it('accountSwitched still works without a cached session', async () => {
+    const client = createTestQueryClient();
+    client.setQueryData(['books', 7], 'x');
+    await applyChange(client, { type: 'accountSwitched' });
+    expect(client.getQueryState(['books', 7])?.isInvalidated).toBe(true);
+  });
+
+  it.each([
+    [1, s(['notifications', 1])],
+    [2, []],
+  ])(
+    'notificationsChanged for user %i refreshes only that list',
+    async (userId, expected) => {
+      const stale = await staleAfter({ type: 'notificationsChanged', userId });
+      expect(stale).toEqual(expected);
     }
   );
 });

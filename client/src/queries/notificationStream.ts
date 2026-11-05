@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { openNotificationStream } from '../api/notificationStream';
 import type { PublicNotification } from '../types/api';
-import { queryKeys } from './keys';
+import { applyChange } from './applyChange';
 
 // How long to wait before opening a stream again once the browser has given
 // up on one. Long enough that a server that keeps refusing is not hammered;
@@ -28,8 +28,9 @@ export const useNotificationStream = (
     const open = () => {
       close = openNotificationStream({
         onNotification: (notification) => {
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.notifications(userId),
+          void applyChange(queryClient, {
+            type: 'notificationsChanged',
+            userId,
           });
           handleNotification(notification);
         },
@@ -38,7 +39,7 @@ export const useNotificationStream = (
         // retry. Otherwise the server was briefly away, and one more try
         // follows after the delay.
         onClosed: () => {
-          void queryClient.invalidateQueries({ queryKey: queryKeys.session });
+          void applyChange(queryClient, { type: 'sessionStale' });
           retry = setTimeout(open, NOTIFICATION_STREAM_RETRY_MS);
         },
       });
