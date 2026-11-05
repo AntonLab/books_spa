@@ -46,7 +46,6 @@ export const useReportComment = (bookId: number) => {
       commentId: number;
       payload: ReportPayload;
     }) => reportComment(commentId, payload),
-    // The modal closes on a thread that already carries the flags.
     onSuccess: () =>
       applyChange(queryClient, { type: 'commentChanged', bookId }),
   });

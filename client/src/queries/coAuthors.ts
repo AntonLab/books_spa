@@ -10,9 +10,9 @@ export interface CreditedWork {
   id: number;
 }
 
-// A credit changes the work's byline, so the work's whole cache prefix is
-// invalidated — every list and the detail that embed `authors`. The wider
-// book or series change (genres, allSeries/allBooks) is accepted.
+// A credit changes the work's byline, so every list and detail that embeds
+// `authors` goes stale. `bookChanged` and `seriesChanged` also refresh genres
+// and the opposite books/series prefix; that extra refetch is accepted.
 const useCreditMutation = (
   work: CreditedWork,
   forBook: (bookId: number, userId: number) => Promise<unknown>,

@@ -214,35 +214,26 @@ export const applyChange = async (
     // Another tab or a closed stream says the session may have ended: only
     // /auth/me is asked again, so a Lost session surfaces.
     case 'sessionStale':
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.session }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.session });
       return;
     // The session is the query that told us, so refetching it again is
     // pointless; notifications and settings were already removed by the caller.
     case 'accountSwitched':
-      await Promise.all([
-        queryClient.invalidateQueries({
-          predicate: (query) => query.queryHash !== hashKey(queryKeys.session),
-        }),
-      ]);
+      await queryClient.invalidateQueries({
+        predicate: (query) => query.queryHash !== hashKey(queryKeys.session),
+      });
       return;
     // A pushed or polled Notification changes only that Account's list.
     case 'notificationsChanged':
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.notifications(change.userId),
-        }),
-      ]);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.notifications(change.userId),
+      });
       return;
-    // Not everything is awaited here: only the thread's refetch is. The modal or
-    // form waits on it (CommentSection clears its form when the write settles),
-    // and the book's detail, whose commentCount BookPage's Statistics tab shows,
-    // refetches behind it. An edit moves no count, but one extra detail refetch
-    // is cheaper than a second intent. An Owner's edit or delete settles or
-    // reopens Reports; Create fires it too, the extra refetch only runs while a
-    // Reports tab is mounted. A comment change cannot affect the chapters or
-    // another book's thread.
+    // Only the thread's refetch is awaited: CommentSection clears its form when
+    // the write settles. The book's detail (commentCount, shown by BookPage's
+    // Statistics tab) and allReports refetch behind it. An edit moves no count,
+    // but one extra detail refetch is cheaper than a second intent; Create
+    // refetches Reports too, which only runs while a Reports tab is mounted.
     case 'commentChanged':
       void queryClient.invalidateQueries({
         queryKey: queryKeys.book(change.bookId),
