@@ -37,6 +37,15 @@ the gates", "every result arrives twice".
 - **A brief item copied from a follow-ups line** is checked against the spec
   or code the line came from, not the line itself: a line is a summary. In the
   PR #251 and #263 follow-ups 4 of 18 items each were wrong or infeasible.
+- **A brief item that asks for a test** ("a failing regex does not match across
+  a blank line") gets the input and both outputs: run the old code and the new
+  code on it. If both give the same result, the test cannot fail; drop the item.
+  In the 2026-11-05 round the `^\s*` and `^[ \t]*` regexes both gave
+  `[ 'b bad' ]` on the test's input, and the test was deleted a round later.
+- **A brief item that prescribes a process kill or spawn order** gets a repro on
+  the platform where it matters. Under `shell: true` on Windows,
+  `child.kill()` before `taskkill /T /F` left the sleeping grandchild alive;
+  `taskkill` first killed it.
 - **A count in a brief** ("a like has two keys", "N handlers", "three
   callers") gets the same: read the code or `git grep -c` and quote the
   output. In the queue-b follow-ups a wrong key count cost a review round.
