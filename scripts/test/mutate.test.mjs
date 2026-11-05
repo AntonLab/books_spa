@@ -24,6 +24,19 @@ import {
 const git = (root, ...args) =>
   spawnSync('git', args, { cwd: root, encoding: 'utf8' }).stdout.trim();
 
+const commit = (root, flags, msg) =>
+  git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', flags, msg);
+
+const run = (root, from, to, extra) =>
+  mutate({
+    root,
+    file: 'a.txt',
+    from,
+    to,
+    command: 'node check.mjs',
+    ...extra,
+  });
+
 // A git repo with a tracked a.txt and a check.mjs that passes while a.txt has "alpha".
 const sandbox = (t) => {
   const root = mkdtempSync(join(tmpdir(), 'mutate-'));
@@ -37,16 +50,7 @@ const sandbox = (t) => {
       "process.exit(readFileSync('a.txt', 'utf8').includes('alpha') ? 0 : 1);\n"
   );
   git(root, 'add', '-A');
-  git(
-    root,
-    '-c',
-    'user.name=t',
-    '-c',
-    'user.email=t@t',
-    'commit',
-    '-qm',
-    'init'
-  );
+  commit(root, '-qm', 'init');
   return root;
 };
 
@@ -84,13 +88,7 @@ test('countOccurrences counts overlapping matches', () => {
 
 test('mutate KILLED: replaces during the run, restores after', async (t) => {
   const root = sandbox(t);
-  const r = await mutate({
-    root,
-    file: 'a.txt',
-    from: 'alpha',
-    to: 'omega',
-    command: 'node check.mjs',
-  });
+  const r = await run(root, 'alpha', 'omega');
   assert.equal(r.verdict, 'KILLED');
   assert.equal(readFileSync(join(root, 'a.txt'), 'utf8'), 'alpha beta\n');
   assert.equal(git(root, 'status', '--porcelain'), '');
@@ -98,13 +96,7 @@ test('mutate KILLED: replaces during the run, restores after', async (t) => {
 
 test('mutate SURVIVED when the command still passes', async (t) => {
   const root = sandbox(t);
-  const r = await mutate({
-    root,
-    file: 'a.txt',
-    from: 'beta',
-    to: 'gamma',
-    command: 'node check.mjs',
-  });
+  const r = await run(root, 'beta', 'gamma');
   assert.equal(r.verdict, 'SURVIVED');
   assert.equal(r.exitCode, 0);
   assert.equal(git(root, 'status', '--porcelain'), '');
@@ -126,52 +118,16 @@ test('mutate restores after a command that crashes', async (t) => {
 
 test('mutate refuses zero and ambiguous matches with the count', async (t) => {
   const root = sandbox(t);
-  await assert.rejects(
-    mutate({
-      root,
-      file: 'a.txt',
-      from: 'zzz',
-      to: 'y',
-      command: 'node check.mjs',
-    }),
-    /0 occurrences/
-  );
+  await assert.rejects(run(root, 'zzz', 'y'), /0 occurrences/);
   writeFileSync(join(root, 'a.txt'), 'alpha alpha\n');
-  git(
-    root,
-    '-c',
-    'user.name=t',
-    '-c',
-    'user.email=t@t',
-    'commit',
-    '-qam',
-    'two'
-  );
-  await assert.rejects(
-    mutate({
-      root,
-      file: 'a.txt',
-      from: 'alpha',
-      to: 'y',
-      command: 'node check.mjs',
-    }),
-    /2 occurrences/
-  );
+  commit(root, '-qam', 'two');
+  await assert.rejects(run(root, 'alpha', 'y'), /2 occurrences/);
 });
 
 test('mutate refuses a dirty file before any edit', async (t) => {
   const root = sandbox(t);
   writeFileSync(join(root, 'a.txt'), 'alpha dirty\n');
-  await assert.rejects(
-    mutate({
-      root,
-      file: 'a.txt',
-      from: 'alpha',
-      to: 'o',
-      command: 'node check.mjs',
-    }),
-    /dirty/
-  );
+  await assert.rejects(run(root, 'alpha', 'o'), /dirty/);
   assert.equal(readFileSync(join(root, 'a.txt'), 'utf8'), 'alpha dirty\n');
 });
 
@@ -191,38 +147,14 @@ test('mutate refuses untracked, disallowed and outside paths', async (t) => {
 
 test('mutate rejects an empty from as a UsageError', async (t) => {
   const root = sandbox(t);
-  await assert.rejects(
-    mutate({
-      root,
-      file: 'a.txt',
-      from: '',
-      to: 'x',
-      command: 'node check.mjs',
-    }),
-    UsageError
-  );
+  await assert.rejects(run(root, '', 'x'), UsageError);
 });
 
 test('mutate keeps CRLF bytes and handles an empty to', async (t) => {
   const root = sandbox(t);
   writeFileSync(join(root, 'a.txt'), 'alpha\r\nbeta\r\n');
-  git(
-    root,
-    '-c',
-    'user.name=t',
-    '-c',
-    'user.email=t@t',
-    'commit',
-    '-qam',
-    'crlf'
-  );
-  const r = await mutate({
-    root,
-    file: 'a.txt',
-    from: 'beta',
-    to: '',
-    command: 'node check.mjs',
-  });
+  commit(root, '-qam', 'crlf');
+  const r = await run(root, 'beta', '');
   assert.equal(r.verdict, 'SURVIVED');
   assert.equal(readFileSync(join(root, 'a.txt'), 'utf8'), 'alpha\r\nbeta\r\n');
 });
@@ -230,12 +162,7 @@ test('mutate keeps CRLF bytes and handles an empty to', async (t) => {
 test('mutate calls onApplied with a working restore before the command ends', async (t) => {
   const root = sandbox(t);
   let seen = '';
-  await mutate({
-    root,
-    file: 'a.txt',
-    from: 'beta',
-    to: 'gamma',
-    command: 'node check.mjs',
+  await run(root, 'beta', 'gamma', {
     onApplied: (restoreNow) => {
       seen = readFileSync(join(root, 'a.txt'), 'utf8');
       restoreNow();
