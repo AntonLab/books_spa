@@ -1,3 +1,4 @@
+import { QueryObserver } from '@tanstack/react-query';
 import { createTestQueryClient } from '@/test/queryClient';
 import { applyChange, type Change } from './applyChange';
 
@@ -26,6 +27,8 @@ const KEYS = [
   ['authors', { q: 'a' }],
   ['accounts', 3],
   ['notifications', 1],
+  ['reports'],
+  ['illustrations', { chapterId: 5 }],
 ] as const;
 
 const staleAfter = async (change: Change) => {
@@ -274,6 +277,132 @@ describe('applyChange', () => {
         detailKey: ['books', id],
       });
       expect(stale).toContain(j(['books', id]));
+    }
+  );
+
+  it('sessionStale refreshes only the session', async () => {
+    expect(await staleAfter({ type: 'sessionStale' })).toEqual(
+      s(['auth', 'me'])
+    );
+  });
+
+  it('accountSwitched refreshes every query except the session', async () => {
+    const stale = await staleAfter({ type: 'accountSwitched' });
+    expect(stale).not.toContain(j(['auth', 'me']));
+    expect(stale).toHaveLength(KEYS.length - 1);
+  });
+
+  it('accountSwitched still works without a cached session', async () => {
+    const client = createTestQueryClient();
+    client.setQueryData(['books', 7], 'x');
+    await applyChange(client, { type: 'accountSwitched' });
+    expect(client.getQueryState(['books', 7])?.isInvalidated).toBe(true);
+  });
+
+  it.each([
+    [1, s(['notifications', 1])],
+    [2, []],
+  ])(
+    'notificationsChanged for user %i refreshes only that list',
+    async (userId, expected) => {
+      const stale = await staleAfter({ type: 'notificationsChanged', userId });
+      expect(stale).toEqual(expected);
+    }
+  );
+
+  it('commentChanged refreshes the thread, the book and the reports', async () => {
+    const stale = await staleAfter({ type: 'commentChanged', bookId: 1 });
+    expect(stale).toEqual(
+      expect.arrayContaining(
+        s(['comments', { bookId: 1 }], ['books', 1], ['reports'])
+      )
+    );
+    expect(stale).not.toContain(j(['books', 2]));
+    expect(stale).not.toContain(j(['auth', 'me']));
+  });
+
+  it.each([
+    [true, true],
+    [false, false],
+  ])(
+    'reportSettled with refreshBook %s refreshes the book: %s',
+    async (refreshBook, bookStale) => {
+      const stale = await staleAfter({
+        type: 'reportSettled',
+        bookId: 1,
+        refreshBook,
+      });
+      expect(stale).toEqual(
+        expect.arrayContaining(s(['comments', { bookId: 1 }], ['reports']))
+      );
+      expect(stale.includes(j(['books', 1]))).toBe(bookStale);
+    }
+  );
+
+  it('reportsChanged refreshes only the reports', async () => {
+    expect(await staleAfter({ type: 'reportsChanged' })).toEqual(
+      s(['reports'])
+    );
+  });
+
+  it('illustrationsChanged refreshes only that chapter’s illustrations', async () => {
+    const stale = await staleAfter({
+      type: 'illustrationsChanged',
+      chapterId: 5,
+    });
+    expect(stale).toEqual(s(['illustrations', { chapterId: 5 }]));
+  });
+
+  it.each([
+    [
+      ['books', 7],
+      ['books', 7],
+    ],
+    [
+      ['comments', { bookId: 1 }],
+      ['comments', { bookId: 1 }],
+    ],
+  ])(
+    'likeToggled refreshes only the key it is given (%j)',
+    async (detailKey, expected) => {
+      const stale = await staleAfter({ type: 'likeToggled', detailKey });
+      expect(stale).toEqual(s(expected));
+    }
+  );
+
+  it('listReordered refreshes the given keys and not the book', async () => {
+    const stale = await staleAfter({
+      type: 'listReordered',
+      keys: [
+        ['chapters', { bookId: 2 }],
+        ['library', {}],
+      ],
+    });
+    expect(stale).toEqual(s(['chapters', { bookId: 2 }], ['library', {}]));
+    expect(stale).not.toContain(j(['books', 2]));
+  });
+
+  it('listReordered with no keys resolves and refreshes nothing', async () => {
+    expect(await staleAfter({ type: 'listReordered', keys: [] })).toEqual([]);
+  });
+
+  // Pins "only the thread is awaited": CommentSection clears its form when the
+  // write settles, so a slow book refetch must not hold it back.
+  it.each([
+    { type: 'commentChanged', bookId: 1 },
+    { type: 'reportSettled', bookId: 1, refreshBook: true },
+  ] as const)(
+    '$type resolves while the book refetch never does',
+    async (change) => {
+      const client = createTestQueryClient();
+      client.setQueryData(['comments', { bookId: 1 }], 'x');
+      const observer = new QueryObserver(client, {
+        queryKey: ['books', 1],
+        queryFn: () => new Promise<never>(() => {}),
+      });
+      const unsubscribe = observer.subscribe(() => undefined);
+      await expect(applyChange(client, change)).resolves.toBeUndefined();
+      unsubscribe();
     }
   );
 });

@@ -1,6 +1,5 @@
 import { act, waitFor } from '@testing-library/react';
 import { ApiError } from '../api/client';
-import { useBooksInSeries } from './books';
 import {
   useAddBookToSeries,
   useCreateSeries,
@@ -173,8 +172,6 @@ describe('useAddBookToSeries / useRemoveBookFromSeries', () => {
 });
 
 describe('useReorderSeriesBooks', () => {
-  const grid = { items: [], total: 0, current: 1, pageSize: 100 };
-
   it.each([
     [
       'saves',
@@ -191,30 +188,22 @@ describe('useReorderSeriesBooks', () => {
         ),
     ],
   ])(
-    'refetches the Series page grid and the series books after a reorder that %s',
+    'reports the series books and the Series page grid as reordered after a reorder that %s',
     async (_label, arrange) => {
       arrange();
-      mockedBooks.listBooks.mockResolvedValue(grid);
-      const { result, queryClient } = renderHookWithProviders(() => ({
-        grid: useBooksInSeries(3),
-        reorder: useReorderSeriesBooks(3),
-      }));
-      await waitFor(() => expect(result.current.grid.isSuccess).toBe(true));
-      expect(mockedBooks.listBooks).toHaveBeenCalledTimes(1);
-      const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+      const { result, queryClient } = renderHookWithProviders(() =>
+        useReorderSeriesBooks(3)
+      );
 
       await act(() =>
-        result.current.reorder.mutateAsync([2, 1]).catch(() => undefined)
+        result.current.mutateAsync([2, 1]).catch(() => undefined)
       );
 
-      await waitFor(() =>
-        expect(mockedBooks.listBooks).toHaveBeenCalledTimes(2)
-      );
-      expect(invalidate).toHaveBeenCalledTimes(2);
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: queryKeys.seriesBooks(3),
+      expect(mockedApplyChange).toHaveBeenCalledTimes(1);
+      expect(mockedApplyChange).toHaveBeenCalledWith(queryClient, {
+        type: 'listReordered',
+        keys: [queryKeys.seriesBooks(3), queryKeys.allBooks],
       });
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.allBooks });
     }
   );
 

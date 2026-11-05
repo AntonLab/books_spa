@@ -20,7 +20,16 @@ export type Change =
   | { type: 'favoriteToggled'; detailKey: QueryKey }
   | { type: 'favoriteRemoved' }
   | { type: 'accountChanged' }
-  | { type: 'genreChanged' };
+  | { type: 'genreChanged' }
+  | { type: 'sessionStale' }
+  | { type: 'accountSwitched' }
+  | { type: 'notificationsChanged'; userId: number }
+  | { type: 'commentChanged'; bookId: number }
+  | { type: 'reportSettled'; bookId: number; refreshBook: boolean }
+  | { type: 'reportsChanged' }
+  | { type: 'illustrationsChanged'; chapterId: number }
+  | { type: 'likeToggled'; detailKey: QueryKey }
+  | { type: 'listReordered'; keys: QueryKey[] };
 
 // A delete skips the deleted record's own detail: its page is still mounted,
 // would refetch into a 404 and redirect with "no longer exists" before the
@@ -201,6 +210,77 @@ export const applyChange = async (
         queryClient.invalidateQueries({ queryKey: queryKeys.allBooks }),
         queryClient.invalidateQueries({ queryKey: queryKeys.allSeries }),
       ]);
+      return;
+    // Another tab or a closed stream says the session may have ended: only
+    // /auth/me is asked again, so a Lost session surfaces.
+    case 'sessionStale':
+      await queryClient.invalidateQueries({ queryKey: queryKeys.session });
+      return;
+    // The session is the query that told us, so refetching it again is
+    // pointless; notifications and settings were already removed by the caller.
+    case 'accountSwitched':
+      await queryClient.invalidateQueries({
+        predicate: (query) => query.queryHash !== hashKey(queryKeys.session),
+      });
+      return;
+    // A pushed or polled Notification changes only that Account's list.
+    case 'notificationsChanged':
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.notifications(change.userId),
+      });
+      return;
+    // Only the thread's refetch is awaited: CommentSection clears its form when
+    // the write settles. The book's detail (commentCount, shown by BookPage's
+    // Statistics tab) and allReports refetch behind it. An edit moves no count,
+    // but one extra detail refetch is cheaper than a second intent; Create
+    // refetches Reports too, which only runs while a Reports tab is mounted.
+    case 'commentChanged':
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.book(change.bookId),
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allReports });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.comments(change.bookId),
+      });
+      return;
+    // Settled, not succeeded: a 409 means another Moderator got there first, and
+    // the rows must show who. Same wait as commentChanged: only the thread. The
+    // book is refreshed only when the Comment became a Tombstone.
+    case 'reportSettled':
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allReports });
+      if (change.refreshBook) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.book(change.bookId),
+        });
+      }
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.comments(change.bookId),
+      });
+      return;
+    // The row's reportedAccount.status changes.
+    case 'reportsChanged':
+      await queryClient.invalidateQueries({ queryKey: queryKeys.allReports });
+      return;
+    // No Illustration write moves `chapters.updatedAt`, so never a chapter or
+    // book key.
+    case 'illustrationsChanged':
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.illustrations(change.chapterId),
+      });
+      return;
+    // Runs in onSettled: a 409 or 404 means another tab changed the like, and
+    // the refetch corrects what is on screen.
+    case 'likeToggled':
+      await queryClient.invalidateQueries({ queryKey: change.detailKey });
+      return;
+    // Callers pass the list key plus what else the order shows; a chapter
+    // reorder passes no `book(bookId)`.
+    case 'listReordered':
+      await Promise.all(
+        change.keys.map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey })
+        )
+      );
       return;
     default:
       change satisfies never;

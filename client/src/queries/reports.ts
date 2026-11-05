@@ -15,6 +15,7 @@ import {
 } from '../api/reports';
 import type { ListReportsParams, ReportRange } from '../api/reports';
 import { blockUser } from '../api/users';
+import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
 
 export const useReports = (params: ListReportsParams, enabled = true) => {
@@ -45,14 +46,8 @@ export const useReportComment = (bookId: number) => {
       commentId: number;
       payload: ReportPayload;
     }) => reportComment(commentId, payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.allReports });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.book(bookId) });
-      // Awaited: the modal closes on a thread that already carries the flags.
-      return queryClient.invalidateQueries({
-        queryKey: queryKeys.comments(bookId),
-      });
-    },
+    onSuccess: () =>
+      applyChange(queryClient, { type: 'commentChanged', bookId }),
   });
 };
 
@@ -71,17 +66,12 @@ const useReportAction = (
 
   return useMutation({
     mutationFn: ({ commentId }: ReportAction) => mutationFn(commentId),
-    onSettled: (_data, _error, { bookId }) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.allReports });
-      if (alsoRefreshBook) {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.book(bookId),
-        });
-      }
-      return queryClient.invalidateQueries({
-        queryKey: queryKeys.comments(bookId),
-      });
-    },
+    onSettled: (_data, _error, { bookId }) =>
+      applyChange(queryClient, {
+        type: 'reportSettled',
+        bookId,
+        refreshBook: alsoRefreshBook,
+      }),
   });
 };
 
@@ -97,8 +87,6 @@ export const useBanAccount = () => {
 
   return useMutation({
     mutationFn: (userId: number) => blockUser(userId),
-    // The row's reportedAccount.status changes.
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.allReports }),
+    onSuccess: () => applyChange(queryClient, { type: 'reportsChanged' }),
   });
 };

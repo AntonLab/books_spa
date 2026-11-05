@@ -6,6 +6,7 @@ import {
   updateNotificationSettings,
 } from '../api/notifications';
 import type { NotificationList, NotificationSettings } from '../types/api';
+import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
 
 // How often an open tab asks again. A notification is written when someone
@@ -38,7 +39,7 @@ export const useMarkNotificationsRead = (userId: number) => {
       queryClient.setQueryData<NotificationList>(key, (previous) =>
         previous ? { ...previous, unread } : previous
       );
-      void queryClient.invalidateQueries({ queryKey: key });
+      void applyChange(queryClient, { type: 'notificationsChanged', userId });
     },
   });
 };

@@ -9,6 +9,7 @@ import * as authApi from '../api/auth';
 import type { LoginPayload, RegisterPayload } from 'shared';
 import { ApiError } from '../api/client';
 import { updateUser } from '../api/users';
+import { applyChange } from './applyChange';
 import { queryKeys } from './keys';
 import type { SessionUser } from '../types/api';
 
@@ -75,7 +76,7 @@ export const watchSession = (
   channel: SessionChannel | null
 ): void => {
   channel?.addEventListener('message', () => {
-    void client.invalidateQueries({ queryKey: queryKeys.session });
+    void applyChange(client, { type: 'sessionStale' });
   });
 
   // undefined until the first answer: nothing to compare it with yet.
@@ -111,9 +112,7 @@ export const watchSession = (
       client.removeQueries({
         predicate: (query) => isAccountList(query.queryKey, accountId ?? null),
       });
-      void client.invalidateQueries({
-        predicate: (query) => query.queryHash !== sessionHash,
-      });
+      void applyChange(client, { type: 'accountSwitched' });
     }
     accountId = next;
   });
@@ -124,7 +123,7 @@ export const watchSession = (
       error.status === 401 &&
       client.getQueryData<Session>(queryKeys.session)
     ) {
-      void client.invalidateQueries({ queryKey: queryKeys.session });
+      void applyChange(client, { type: 'sessionStale' });
     }
   };
   client.getQueryCache().subscribe((event) => {

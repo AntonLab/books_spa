@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addCoAuthor, removeCoAuthor } from '../api/books';
 import { addSeriesCoAuthor, removeSeriesCoAuthor } from '../api/series';
+import { applyChange } from './applyChange';
 
 // A work whose Co-authors are managed: a book or a series. Both keep their
 // credits the same way (ADR-0005), through parallel endpoints.
@@ -9,8 +10,9 @@ export interface CreditedWork {
   id: number;
 }
 
-// A credit changes the work's byline, so the work's whole cache prefix is
-// invalidated — every list and the detail that embed `authors`.
+// A credit changes the work's byline, so every list and detail that embeds
+// `authors` goes stale. `bookChanged` and `seriesChanged` also refresh genres
+// and the opposite books/series prefix; that extra refetch is accepted.
 const useCreditMutation = (
   work: CreditedWork,
   forBook: (bookId: number, userId: number) => Promise<unknown>,
@@ -24,8 +26,8 @@ const useCreditMutation = (
         ? forBook(work.id, userId)
         : forSeries(work.id, userId),
     onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: [work.kind === 'book' ? 'books' : 'series'],
+      applyChange(queryClient, {
+        type: work.kind === 'book' ? 'bookChanged' : 'seriesChanged',
       }),
   });
 };

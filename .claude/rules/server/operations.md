@@ -3,6 +3,7 @@ paths:
   - 'server/src/index.ts'
   - 'server/src/app.ts'
   - 'server/src/shutdown.ts'
+  - 'server/src/startServer.ts'
   - 'server/src/expiryPurge.ts'
   - 'server/src/announcements/**'
   - 'server/src/online/**'
@@ -31,8 +32,9 @@ as its first middleware, so errors, 404s and parse failures carry it too.
   and exits 1, as does a pool that fails to close.
 - `shutdown.stopping` turns true on the first call; `index.ts` checks it after
   the last startup await, before anything starts, and ends boot if it is set.
+- `stoppables` holds one entry: `startServer`'s `stop()`. Start order, stop order (expiry purge, announcement pass, online registry, rate limits) and rollback of a failed start live in `startServer.ts`, pinned by `startServer.spec.ts`.
 - `npm run dev` restarts with `SIGTERM`, so every dev restart takes this path.
-  `shutdown.spec.ts` uses fakes, not real signals.
+  `shutdown.spec.ts` keeps using fakes, not real signals.
 
 ## Bind errors (`index.ts`)
 
