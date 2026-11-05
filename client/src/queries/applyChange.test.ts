@@ -1,3 +1,4 @@
+import { QueryObserver } from '@tanstack/react-query';
 import { createTestQueryClient } from '@/test/queryClient';
 import { applyChange, type Change } from './applyChange';
 
@@ -306,6 +307,61 @@ describe('applyChange', () => {
     async (userId, expected) => {
       const stale = await staleAfter({ type: 'notificationsChanged', userId });
       expect(stale).toEqual(expected);
+    }
+  );
+
+  it('commentChanged refreshes the thread, the book and the reports', async () => {
+    const stale = await staleAfter({ type: 'commentChanged', bookId: 1 });
+    expect(stale).toEqual(
+      expect.arrayContaining(
+        s(['comments', { bookId: 1 }], ['books', 1], ['reports'])
+      )
+    );
+    expect(stale).not.toContain(j(['books', 2]));
+    expect(stale).not.toContain(j(['auth', 'me']));
+  });
+
+  it.each([
+    [true, true],
+    [false, false],
+  ])(
+    'reportSettled with refreshBook %s refreshes the book: %s',
+    async (refreshBook, bookStale) => {
+      const stale = await staleAfter({
+        type: 'reportSettled',
+        bookId: 1,
+        refreshBook,
+      });
+      expect(stale).toEqual(
+        expect.arrayContaining(s(['comments', { bookId: 1 }], ['reports']))
+      );
+      expect(stale.includes(j(['books', 1]))).toBe(bookStale);
+    }
+  );
+
+  it('reportsChanged refreshes only the reports', async () => {
+    expect(await staleAfter({ type: 'reportsChanged' })).toEqual(
+      s(['reports'])
+    );
+  });
+
+  // Pins "only the thread is awaited": CommentSection clears its form when the
+  // write settles, so a slow book refetch must not hold it back.
+  it.each([
+    { type: 'commentChanged', bookId: 1 },
+    { type: 'reportSettled', bookId: 1, refreshBook: true },
+  ] as const)(
+    '$type resolves while the book refetch never does',
+    async (change) => {
+      const client = createTestQueryClient();
+      client.setQueryData(['comments', { bookId: 1 }], 'x');
+      const observer = new QueryObserver(client, {
+        queryKey: ['books', 1],
+        queryFn: () => new Promise<never>(() => {}),
+      });
+      const unsubscribe = observer.subscribe(() => undefined);
+      await expect(applyChange(client, change)).resolves.toBeUndefined();
+      unsubscribe();
     }
   );
 });

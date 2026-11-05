@@ -23,7 +23,10 @@ export type Change =
   | { type: 'genreChanged' }
   | { type: 'sessionStale' }
   | { type: 'accountSwitched' }
-  | { type: 'notificationsChanged'; userId: number };
+  | { type: 'notificationsChanged'; userId: number }
+  | { type: 'commentChanged'; bookId: number }
+  | { type: 'reportSettled'; bookId: number; refreshBook: boolean }
+  | { type: 'reportsChanged' };
 
 // A delete skips the deleted record's own detail: its page is still mounted,
 // would refetch into a 404 and redirect with "no longer exists" before the
@@ -228,6 +231,41 @@ export const applyChange = async (
           queryKey: queryKeys.notifications(change.userId),
         }),
       ]);
+      return;
+    // Not everything is awaited here: only the thread's refetch is. The modal or
+    // form waits on it (CommentSection clears its form when the write settles),
+    // and the book's detail, whose commentCount BookPage's Statistics tab shows,
+    // refetches behind it. An edit moves no count, but one extra detail refetch
+    // is cheaper than a second intent. An Owner's edit or delete settles or
+    // reopens Reports; Create fires it too, the extra refetch only runs while a
+    // Reports tab is mounted. A comment change cannot affect the chapters or
+    // another book's thread.
+    case 'commentChanged':
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.book(change.bookId),
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allReports });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.comments(change.bookId),
+      });
+      return;
+    // Settled, not succeeded: a 409 means another Moderator got there first, and
+    // the rows must show who. Same wait as commentChanged: only the thread. The
+    // book is refreshed only when the Comment became a Tombstone.
+    case 'reportSettled':
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allReports });
+      if (change.refreshBook) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.book(change.bookId),
+        });
+      }
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.comments(change.bookId),
+      });
+      return;
+    // The row's reportedAccount.status changes.
+    case 'reportsChanged':
+      await queryClient.invalidateQueries({ queryKey: queryKeys.allReports });
       return;
     default:
       change satisfies never;
