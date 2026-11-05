@@ -26,7 +26,10 @@ export type Change =
   | { type: 'notificationsChanged'; userId: number }
   | { type: 'commentChanged'; bookId: number }
   | { type: 'reportSettled'; bookId: number; refreshBook: boolean }
-  | { type: 'reportsChanged' };
+  | { type: 'reportsChanged' }
+  | { type: 'illustrationsChanged'; chapterId: number }
+  | { type: 'likeToggled'; detailKey: QueryKey }
+  | { type: 'listReordered'; keys: QueryKey[] };
 
 // A delete skips the deleted record's own detail: its page is still mounted,
 // would refetch into a 404 and redirect with "no longer exists" before the
@@ -266,6 +269,27 @@ export const applyChange = async (
     // The row's reportedAccount.status changes.
     case 'reportsChanged':
       await queryClient.invalidateQueries({ queryKey: queryKeys.allReports });
+      return;
+    // No Illustration write moves `chapters.updatedAt`, so never a chapter or
+    // book key.
+    case 'illustrationsChanged':
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.illustrations(change.chapterId),
+      });
+      return;
+    // Runs in onSettled: a 409 or 404 means another tab changed the like, and
+    // the refetch corrects what is on screen.
+    case 'likeToggled':
+      await queryClient.invalidateQueries({ queryKey: change.detailKey });
+      return;
+    // Callers pass the list key plus what else the order shows; a chapter
+    // reorder passes no `book(bookId)`.
+    case 'listReordered':
+      await Promise.all(
+        change.keys.map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey })
+        )
+      );
       return;
     default:
       change satisfies never;

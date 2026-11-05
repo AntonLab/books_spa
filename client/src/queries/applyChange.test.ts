@@ -345,6 +345,47 @@ describe('applyChange', () => {
     );
   });
 
+  it('illustrationsChanged refreshes only that chapter’s illustrations', async () => {
+    const stale = await staleAfter({
+      type: 'illustrationsChanged',
+      chapterId: 5,
+    });
+    expect(stale).toEqual(s(['illustrations', { chapterId: 5 }]));
+  });
+
+  it.each([
+    [
+      ['books', 7],
+      ['books', 7],
+    ],
+    [
+      ['comments', { bookId: 1 }],
+      ['comments', { bookId: 1 }],
+    ],
+  ])(
+    'likeToggled refreshes only the key it is given (%j)',
+    async (detailKey, expected) => {
+      const stale = await staleAfter({ type: 'likeToggled', detailKey });
+      expect(stale).toEqual(s(expected));
+    }
+  );
+
+  it('listReordered refreshes the given keys and not the book', async () => {
+    const stale = await staleAfter({
+      type: 'listReordered',
+      keys: [
+        ['chapters', { bookId: 2 }],
+        ['library', {}],
+      ],
+    });
+    expect(stale).toEqual(s(['chapters', { bookId: 2 }], ['library', {}]));
+    expect(stale).not.toContain(j(['books', 2]));
+  });
+
+  it('listReordered with no keys resolves and refreshes nothing', async () => {
+    expect(await staleAfter({ type: 'listReordered', keys: [] })).toEqual([]);
+  });
+
   // Pins "only the thread is awaited": CommentSection clears its form when the
   // write settles, so a slow book refetch must not hold it back.
   it.each([

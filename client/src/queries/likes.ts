@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryKey } from '@tanstack/react-query';
 import { createLike, deleteLike } from '../api/likes';
+import { applyChange } from './applyChange';
 import type { CreateLikePayload } from 'shared';
 
 // One hook for both directions, because the button has one job. `existingId` is
@@ -27,6 +28,7 @@ export const useToggleLike = (invalidates: QueryKey) => {
     // onSettled, not onSuccess: a 409 (liked from another tab) or a 404
     // (already unliked) means the count and the viewer's like id on screen
     // are stale, and only the refetch puts them right.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: invalidates }),
+    onSettled: () =>
+      applyChange(queryClient, { type: 'likeToggled', detailKey: invalidates }),
   });
 };
