@@ -6,9 +6,9 @@ import type { AppDeps } from './app.ts';
 import { startServer, type StartServerDeps } from './startServer.ts';
 
 interface HarnessOptions {
-  failAt?: 'createApp' | 'start' | 'startAnnouncementPass' | 'startExpiryPurge';
-  // The call string of a stop that throws, e.g. 'pass.stop'.
-  failStopOf?: string;
+  failAt?: 'createApp' | 'start' | 'startAnnouncementPass';
+  // The call strings of the stops that throw, e.g. ['pass.stop'].
+  failStopOf?: string[];
 }
 
 interface Harness {
@@ -38,7 +38,8 @@ function harness(opts: HarnessOptions = {}): Harness {
     return {
       stop() {
         calls.push(stopCall);
-        if (opts.failStopOf === stopCall) throw new Error(`${stopCall} failed`);
+        if (opts.failStopOf?.includes(stopCall))
+          throw new Error(`${stopCall} failed`);
       },
     };
   }
@@ -65,7 +66,6 @@ function harness(opts: HarnessOptions = {}): Harness {
     trustProxy: 2,
     startExpiryPurge() {
       calls.push('purge.start');
-      if (opts.failAt === 'startExpiryPurge') throw new Error('boom');
       return part('purge.stop');
     },
     createOnlineRegistry() {
@@ -173,7 +173,7 @@ test('a failure in onlineRegistry.start() stops only the purge and the registry'
 });
 
 test('a failure in the first factory stops nothing and rethrows the same error', () => {
-  const h = harness({ failAt: 'startExpiryPurge' });
+  const h = harness();
   const boom = new Error('boom');
   h.deps.startExpiryPurge = () => {
     h.calls.push('purge.start');
@@ -187,7 +187,7 @@ test('a failure in the first factory stops nothing and rethrows the same error',
 });
 
 test('a stop that throws during rollback does not replace the start error', () => {
-  const h = harness({ failAt: 'createApp', failStopOf: 'pass.stop' });
+  const h = harness({ failAt: 'createApp', failStopOf: ['pass.stop'] });
   assert.throws(() => startServer(h.deps), /boom/);
   assert.deepEqual(
     h.calls.slice(h.calls.indexOf('app.create') + 1),
@@ -196,14 +196,22 @@ test('a stop that throws during rollback does not replace the start error', () =
 });
 
 test('a throwing stop() still stops the later parts and rethrows the first error', () => {
-  const h = harness({ failStopOf: 'pass.stop' });
+  const h = harness({ failStopOf: ['pass.stop'] });
   const started = startServer(h.deps);
   h.calls.length = 0;
   assert.throws(() => started.stop(), /pass\.stop failed/);
   assert.deepEqual(h.calls, STOP_ORDER);
 });
 
-test('stop() twice does not throw', () => {
+test('when two stops throw, stop() rethrows the first error', () => {
+  const h = harness({ failStopOf: ['pass.stop', 'registry.stop'] });
+  const started = startServer(h.deps);
+  h.calls.length = 0;
+  assert.throws(() => started.stop(), /pass\.stop failed/);
+  assert.deepEqual(h.calls, STOP_ORDER);
+});
+
+test("stop() twice calls every part's stop again without throwing", () => {
   const h = harness();
   const started = startServer(h.deps);
   started.stop();

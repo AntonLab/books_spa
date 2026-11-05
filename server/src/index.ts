@@ -10,7 +10,6 @@ import { createAuthRateLimits } from './middleware/authRateLimit.ts';
 import { initModels } from './models/index.ts';
 import { createOnlineRegistry } from './online/onlineRegistry.ts';
 import { setNotificationPublisher } from './online/notificationPublisher.ts';
-import { startServer } from './startServer.ts';
 import { syncPermissions } from './permissions/permissionStore.ts';
 import { createSequelizeAnnouncementRepository } from './repositories/announcementRepository.ts';
 import { createSequelizeRepositories } from './repositories/sequelizeRepositories.ts';
@@ -19,6 +18,7 @@ import {
   registerShutdownSignals,
   type ShutdownDeps,
 } from './shutdown.ts';
+import { startServer } from './startServer.ts';
 
 function loadLocalEnv(): void {
   try {
