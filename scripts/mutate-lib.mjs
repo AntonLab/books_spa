@@ -5,7 +5,8 @@
  *
  * Refuses (`Refusal`, CLI exit 1) a path outside the repo or under
  * `DISALLOWED`, an untracked or dirty file (a restore would destroy its
- * edits), and a `from` found 0 or 2+ times. An empty `from` is a `UsageError`
+ * edits), a file that resolves outside the repo or is not valid UTF-8, and a
+ * `from` found 0 or 2+ times. An empty `from` is a `UsageError`
  * (CLI exit 2). The file is written as utf8 with no newline normalisation, so
  * CRLF bytes survive.
  */
@@ -21,15 +22,14 @@ const DISALLOWED = ['.git', 'node_modules', '.claude', 'docs/superpowers'];
 const git = (cwd, ...args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' });
 
+// True when `rel` (from `pathApi.relative`) names `..`, climbs out, or is absolute.
+const isOutside = (rel, pathApi) =>
+  rel === '..' || rel.startsWith(`..${pathApi.sep}`) || pathApi.isAbsolute(rel);
+
 export const repoRelative = (root, file, pathApi = path) => {
   const abs = pathApi.resolve(root, file);
   const rel = pathApi.relative(root, abs);
-  if (
-    rel === '' ||
-    rel === '..' ||
-    rel.startsWith(`..${pathApi.sep}`) ||
-    pathApi.isAbsolute(rel)
-  )
+  if (rel === '' || isOutside(rel, pathApi))
     throw new Refusal(`${file} is outside the repo`);
   const posix = rel.split(pathApi.sep).join('/');
   const lower = `${posix.toLowerCase()}/`;
@@ -57,13 +57,6 @@ const restoreOrExplain = (root, rel) => {
       cause,
     });
   }
-};
-
-const isInside = (root, target) => {
-  const rel = path.relative(root, target);
-  return (
-    rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
-  );
 };
 
 const run = (command, cwd) => {
@@ -149,7 +142,7 @@ export const mutate = async ({ root, file, from, to, command, onApplied }) => {
   if (git(root, 'status', '--porcelain', '--', rel).trim() !== '')
     throw new Refusal(`${rel} is dirty: commit or stash it first`);
   const abs = path.join(root, rel);
-  if (!isInside(realpathSync(root), realpathSync(abs)))
+  if (isOutside(path.relative(realpathSync(root), realpathSync(abs)), path))
     throw new Refusal(`${rel} resolves outside the repo`);
   const buf = readFileSync(abs);
   const text = buf.toString('utf8');
@@ -168,7 +161,12 @@ export const mutate = async ({ root, file, from, to, command, onApplied }) => {
   );
   try {
     const { kill, done } = run(command, root);
-    onApplied?.({ restore: () => restoreOrExplain(root, rel), kill });
+    try {
+      onApplied?.({ restore: () => restoreOrExplain(root, rel), kill });
+    } catch (error) {
+      kill();
+      throw error;
+    }
     const { exitCode, output } = await done;
     return {
       verdict: exitCode === 0 ? 'SURVIVED' : 'KILLED',

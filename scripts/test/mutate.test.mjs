@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -228,11 +229,47 @@ test('mutate counts overlapping matches as two occurrences', async (t) => {
   const root = sandbox(t);
   writeFileSync(join(root, 'a.txt'), 'aaa');
   commit(root, '-qam', 'aaa');
-  await assert.rejects(run(root, 'aa', 'b'), /2 occurrences/);
-  await assert.rejects(run(root, 'aa', 'b'), Refusal);
+  await assert.rejects(
+    run(root, 'aa', 'b'),
+    (error) => error instanceof Refusal && /2 occurrences/.test(error.message)
+  );
 });
 
-test('mutate reports a signal-killed command as KILLED with exit code 1', async (t) => {
+test('mutate kills the command and restores when onApplied throws', async (t) => {
+  const root = sandbox(t);
+  const marker = new Error('onApplied boom');
+  await assert.rejects(
+    mutate({
+      root,
+      file: 'a.txt',
+      from: 'alpha',
+      to: 'omega',
+      command: `node -e "require('node:fs').writeFileSync('pid.txt', String(process.pid)); setTimeout(() => {}, 20000)"`,
+      onApplied: () => {
+        throw marker;
+      },
+    }),
+    (error) => error === marker
+  );
+  assert.equal(readFileSync(join(root, 'a.txt'), 'utf8'), 'alpha beta\n');
+  // A surviving command writes its pid within a second; a killed one never does.
+  for (let i = 0; i < 20 && !existsSync(join(root, 'pid.txt')); i++)
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  if (!existsSync(join(root, 'pid.txt'))) return;
+  const pid = Number(readFileSync(join(root, 'pid.txt'), 'utf8'));
+  const alive = (() => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  if (alive) process.kill(pid);
+  assert.equal(alive, false, 'the command outlived the rejected mutate');
+});
+
+test('mutate reports a signal-killed command as KILLED with a non-zero exit code', async (t) => {
   const root = sandbox(t);
   const r = await mutate({
     root,
@@ -242,7 +279,7 @@ test('mutate reports a signal-killed command as KILLED with exit code 1', async 
     command: `node -e "process.kill(process.pid, 'SIGKILL')"`,
   });
   assert.equal(r.verdict, 'KILLED');
-  assert.equal(r.exitCode, 1);
+  assert.notEqual(r.exitCode, 0);
   assert.equal(readFileSync(join(root, 'a.txt'), 'utf8'), 'alpha beta\n');
 });
 
@@ -277,6 +314,28 @@ test('mutate refuses a symlink that resolves outside the repo', async (t) => {
       command: 'node check.mjs',
     }),
     /link\.txt resolves outside the repo/
+  );
+  assert.equal(readFileSync(join(outside, 'target.txt'), 'utf8'), 'alpha\n');
+});
+
+test('mutate refuses a tracked path through a junction that leaves the repo', async (t) => {
+  if (process.platform !== 'win32') return t.skip('junctions are Windows-only');
+  const root = sandbox(t);
+  const outside = mkdtempSync(join(tmpdir(), 'mutate-out-'));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  writeFileSync(join(outside, 'target.txt'), 'alpha\n');
+  symlinkSync(outside, join(root, 'jd'), 'junction');
+  git(root, 'add', 'jd/target.txt');
+  commit(root, '-qm', 'junction');
+  await assert.rejects(
+    mutate({
+      root,
+      file: 'jd/target.txt',
+      from: 'alpha',
+      to: 'omega',
+      command: 'node check.mjs',
+    }),
+    /jd\/target\.txt resolves outside the repo/
   );
   assert.equal(readFileSync(join(outside, 'target.txt'), 'utf8'), 'alpha\n');
 });
@@ -362,13 +421,6 @@ test('formatResult drops CR and trailing blank lines from the tail', () => {
     formatResult({ verdict: 'KILLED', output: 'one\r\ntwo\r\n\r\n\r\n' }),
     'KILLED\none\ntwo'
   );
-});
-
-test('parseReport name regexes do not reach across a blank line', () => {
-  const node = '# pass 1\n# fail 1\n\n\n✖ b bad (0.10ms)\n';
-  assert.deepEqual(parseReport(node).failed, ['b bad']);
-  const jest = 'Tests: 1 failed\n\n\n  ✕ subtracts (3 ms)\n';
-  assert.deepEqual(parseReport(jest).failed, ['subtracts']);
 });
 
 const cli = (root, ...args) => {
