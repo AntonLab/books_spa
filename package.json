@@ -35,15 +35,15 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
-    "concurrently": "10.0.6",
+    "concurrently": "10.0.7",
     "eslint": "9.39.5",
     "eslint-config-prettier": "10.1.8",
-    "fallow": "3.38.0",
-    "globals": "17.13.0",
-    "playwright-core": "1.64.1",
-    "prettier": "3.9.10",
-    "skills": "1.7.4",
+    "fallow": "3.44.0",
+    "globals": "17.14.0",
+    "playwright-core": "1.65.1",
+    "prettier": "3.10.1",
+    "skills": "1.9.0",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.72.1"
+    "typescript-eslint": "8.73.0"
   }
 }
